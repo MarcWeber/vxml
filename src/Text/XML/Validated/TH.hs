@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Text.XML.Validated.TH where
+import Data.List
 import Data.Maybe
 import Control.Monad
 import Text.XML.HaXml.Types
@@ -12,6 +13,7 @@ import Language.Haskell.TH
 import Language.Haskell.TH.Syntax
 import Language.Haskell.TH.Lib
 import System.IO
+import Text.XML.Validated.Types
 
 -- all the template stuff 
  
@@ -33,33 +35,61 @@ instanceOfSimple :: TypeQ -> TypeQ -> DecQ
 instanceOfSimple a b = 
   instanceD (cxt []) (appTn a [b]) []
 
+attrHaskellName = mkName . (++ "_A") . fstUpper
+elementHaskellName = mkName .  (++ "_T") . fstUpper
+
+-- initial state ready for starting type based parser
+elementState el EMPTY = appE 'Fin ( conEl el )
+elementState el ANY = error "ANY not yet supported"
+elementState el (Mixed _) = error "MIXED not yet supported"
+elementState el (ContentSpec spec) = sp spec
+  where sp (TagName n mod)   = addMod mod $ conEl n
+        sp (Choice list mod) = addMod mod $ choice $ map sp list
+        sp (Seq list mod)    = addMod mod $ seq $ map sp list
+        addMod None x = x
+        addMod Query x = appE (conT 'Query) x
+        addMod Star x = appE (conT 'Star) x
+                                              -- (x)+ is rewritten seq [x, x*]
+        seq = appE (conT 'Sequence) . list
+        choice = appE (conT 'Choice) . list
+        addMod Plus x =  seq [x, appE (conT 'Star) x ]
+        conEl = (conT . mkName . elementHaskellName)
+
 toCode ::  ( String, (Maybe ElementDecl, Maybe AttListDecl)) -> Q [Dec]
 toCode (n, (Just (ElementDecl _ content), Just (AttListDecl _ attdefList) ) ) = do
-  let attrDataName = mkName $ (++ "_A") $ fstUpper n
-      tagDataName  =  mkName $  (++ "_T") $ fstUpper n
+  let elDataName  =  elementHaskellName n
 
   sequence [
-    -- dataAttribute 
-    dataD (cxt []) attrDataName [] [] []
 
-    , -- instanceAttrType
-    instanceOfSimple (conT ''AttributeType) (conT attrDataName)
-    -- instanceAttrShow <- instanceShow attrDataName n
 
-    , -- dataTag
-    dataD (cxt []) tagDataName [] [] []
+      -- | dataElement
+    dataD (cxt []) elDataName [] [] []
 
-    , -- instanceTagType
-    instanceOfSimple (conT ''TagType) (conT tagDataName)
+    , -- instanceElementType
+    instanceOfSimple (conT ''ElementType) (conT elDataName)
 
-    , -- function tagname for convinience 
+    , -- function elname for convinience 
     funD (mkName $ fstLower n) 
-         [ clause [] (normalB (appEn (varE 'createTagT) [sigE (varE 'undefined) (conT tagDataName)] ) ) []]
+         [ clause [] (normalB (appEn (varE 'createElementT) [sigE (varE 'undefined) (conT elDataName)] ) ) []]
 
-    , -- instanceTagShow
-    instanceShow tagDataName n
-    -- instanceTagInitialState
+    , -- instanceElementShow
+    instanceShow elDataName n
+
+    , -- instanceElementInitialState
+
+    let elType = newName "elType"
+        state = newName "state"
+        reqAttributes = list [ attrHaskellName name 
+                             | (AttDef name attType REQUIRED) <- attdefList ]
+    in instanceD (cxt []) (appTn (conT ''InitialState) [conT elType, conT state]) 
+            [funD 'initialState [ clause [wildP] (normalB (
+              sigE (varE 'undefined) 
+                   (appTn (conT 'Element) [conT elDataName, reqAttributes, list [], elementState content] )
+              ) ) []] ]
     ]
+
+class InitialState elType state where
+  initialState :: elType -> state
 
 
 
@@ -69,10 +99,24 @@ dtdToTypes file = do
   case read of
     Left a -> fail a
     Right (Just (DTD name mbExtId decls))  -> do
-    types <- liftM concat $ mapM toCode $ zipElements decls
+    let zipped = zipElements decls
+    let attrNamesUniq = nub $ map (\(AttDef n _ _ _) -> n) 
+                            $ concatMap ( (\(AttListDecl _ l) -> l) . snd . snd ) zipped
+    -- shared attribute names and instances 
+        attrDecs = liftM concat $ map (\ n -> 
+                      do let name = (attrHaskellName n)
+                         d <- dataD (cxt []) name [] [] []
+                         s <- instanceShow name
+                         i <- instanceOfSimple (conT ''AttributeType) (conT $ mkName name)
+                         return [d,s,i] ) attrNamesUniq
+
+    -- | elements and attribute data belonging to it
+    types <- liftM concat $ mapM toCode $ zipped
+
+    let all = attrDecs ++ types
     runIO $ do -- for debugging purposes print generated code
        putStrLn "============= generated code ========================================="
-       mapM_ (putStrLn . pprint) types
+       mapM_ (putStrLn . pprint) all
        putStrLn "============= generated code end ====================================="
        hFlush stdout
-    return types
+    return all

@@ -6,7 +6,7 @@ import Text.XML.Validated.Types
 import Data.List
 
 -- most simple string instance, XML is generated on directly
-
+{-
 instance (Show tagType) => CreateTag tagType String where
   createTag _ = "<" ++ (show (undefined :: tagType))
 
@@ -24,3 +24,4 @@ instance AddText String String where
   addText = (++)
 instance EndTag String String where
   endTag = ( ++ ">")
+-}
