@@ -1,6 +1,9 @@
 {-# OPTIONS_GHC -XTemplateHaskell -XStandaloneDeriving -XTypeSynonymInstances -XMultiParamTypeClasses -XFunctionalDependencies #-}
-{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE OverlappingInstances, UndecidableInstances,  FlexibleContexts,  FlexibleContexts,  FlexibleInstances,  EmptyDataDecls #-}
 module Main where
+import Data.HList
+import Language.Haskell.TH.All
+import Language.Haskell.TH.FixedPpr
 import Control.Monad
 import Directory
 import Control.Exception
@@ -55,8 +58,24 @@ readDTD file = do
 -- HaXmL only returns a loose list of element and attr list declarations 
 -- this functions ties them.
 
-$( dtdToTypes "dtds/test.dtd" )
+$( dtdToTypes "dtds/test_simple.dtd" 
+              (XmlIds (Just "-//W3C//DTD XHTML 1.0 Strict//EN") 
+                      (Just "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd") ) 
+ )
 
+
+
+dummy :: ( Consume (Seq (Or  (Elem  A_T) (Elem B_T)) 
+                        (Star (Or  (Elem  A_T) (Elem B_T)))
+                    )
+                    B_T r 
+         , Consume r A_T r'
+         , Consume r' A_T r2
+        ) => r2
+dummy = undefined
+
+
+--  )
 main = do
   -- [arg] <- getArgs
   let arg = "/pr/haskell/vxml/dtds/xhtml1-20020801/DTD/xhtml1-strict.dtd"
@@ -64,4 +83,11 @@ main = do
   -- readdtd arg >>= \r -> case r of
     -- left a -> putstrln a
     -- right (just (dtd name mbextid decls))  -> mapm_ print $ zipelements decls
-  putStrLn $ endTag
+  putStrLn $ xmlDocT $ addAttrT (addTextT (addElT (addElT root b) a) "abc")
+       
+
+  -- putStrLn $ fromPT $ endElT $  createElT (undefined :: Root_T)
+  print "end"
+
+
+

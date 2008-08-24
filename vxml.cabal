@@ -1,7 +1,7 @@
 Name:            vxml
 category:        XML
 synopsis:        library to write xml documents enforcing dtd validity by the haskell type system
-                 idea based on WASH
+                 idea based on WASH - unstable library, things will and must change
 version:         0.0
 build-type:      Simple
 build-depends:   haskell98
@@ -20,7 +20,7 @@ executable:     test
 main-is:        test.hs
 hs-source-dirs: test, src
 build-depends:   haskell98
-                 ,base
+                , base
                 , HList
                 , HaXml >= 1.19
                 , filepath

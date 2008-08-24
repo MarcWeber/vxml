@@ -1,0 +1,44 @@
+<!ELEMENT a EMPTY>
+<!ATTLIST a
+  id          ID             #IMPLIED
+  >
+<!ELEMENT b EMPTY>
+<!ATTLIST b
+  id          ID             #IMPLIED
+  >
+<!ELEMENT c EMPTY>
+<!ATTLIST c
+  id          ID             #IMPLIED
+  >
+<!ELEMENT d EMPTY>
+<!ELEMENT e EMPTY>
+<!ELEMENT f EMPTY>
+
+
+<!ELEMENT choice ((a | b )? | c+)>
+<!ATTLIST choice
+  id          ID             #IMPLIED
+  >
+
+
+<!ELEMENT sequence (a, b, c)>
+<!ELEMENT testcase1 (a, b?, c)>
+<!ELEMENT testcase2 ((a?, b)| (c?, d))>
+
+<!ELEMENT testcase3 ( ( (a?, d)
+                      | (b?)
+                      )
+                    , c )
+                    >
+
+<!ELEMENT root ((
+                choice 
+                | sequence
+                | testcase1
+                | testcase2
+                | testcase3
+                | a
+                )+)>
+<!ATTLIST root
+  id          CDATA             #IMPLIED
+  >

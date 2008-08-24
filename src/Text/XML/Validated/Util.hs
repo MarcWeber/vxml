@@ -1,9 +1,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Text.XML.Validated.Util where
+import Language.Haskell.TH.All
 import Data.Char
 import Data.HList
 import Language.Haskell.TH.Lib
 import Language.Haskell.TH.Syntax
+import Text.XML.Validated.Types
 
 fstUpper (x:xs) = toUpper x : xs
 fstLower (x:xs) = toLower x : xs
@@ -18,6 +20,17 @@ appn app f = appn' f . reverse
   where appn' f [] = f
         appn' f (a:as) = app (appn' f as) a
 
+-- undefined :: t
+undType :: TypeQ -> ExpQ
+undType t = sigE (varE 'undefined) t
+
 -- contstruct HList 
-list [] = conT 'HNil
-list (x:xs) = appTn (conT 'HCons) [x, list xs]
+hlist [] = conT ''HNil
+hlist (x:xs) = appTn (conT ''HCons) [conT x, hlist xs]
+-- contstruct Seq list
+list r m [x] = error $ m ++ " list with only on element! " ++ ( pprint $ unsafePerformIO $ runQ x)
+list t m [x,y] = appTn t [x, y]
+list t m (x:xs) = appTn t [x, list t m xs]
+seqList, choiceList :: [ TypeQ ] -> TypeQ
+seqList = list (conT ''Seq) "sequence"
+choiceList = list (conT ''Or) "choice"

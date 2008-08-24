@@ -1,0 +1,31 @@
+<!DOCTYPE root PUBLIC "vxml-test" "../dtds/test.dtd">
+<root>
+  <!-- sequnce 1 -->
+  <testcase1>
+    <a></a><b></b><c></c>
+  </testcase1>
+  <!-- sequnce 2 (b may be omitted) -->
+  <testcase1>
+    <a></a><c></c>
+  </testcase1>
+
+  <!-- choice 1 -->
+  <choice></choice>
+  <choice></choice>
+  <choice><a></a></choice>
+  <choice><b></b></choice>
+  <choice><c></c><c></c><c></c></choice> <!-- c many times -->
+
+  <!--testcase 2 -->
+  <testcase2> <b/>     </testcase2>
+  <testcase2> <a/><b/> </testcase2>
+  <testcase2> <d/>     </testcase2>
+  <testcase2> <c/><d/> </testcase2>
+
+  <!-- testcase 3 -->
+  <testcase3> <c/> </testcase3>
+  <testcase3> <b/><c/> </testcase3>
+  <testcase3> <d/><c/> </testcase3>
+  <testcase3> <a/><d/><c/> </testcase3>
+
+</root>
