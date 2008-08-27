@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fcontext-stack=100 #-}
 {-# LANGUAGE NoMonomorphismRestriction,  PatternSignatures, ScopedTypeVariables, EmptyDataDecls,
     FunctionalDependencies, FlexibleInstances, FlexibleContexts,
     MultiParamTypeClasses, UndecidableInstances, OverlappingInstances #-}
@@ -28,7 +29,7 @@ module Text.XML.Validated.Types (
 
 
   -- exported for utils and TH, should be moved in its own module ?
-  , Seq, Or, ANY, Element, C, Query, Star, EMPTY
+  , Seq, Or, ANY, Element, C, Query, Star, EMPTY, PCDATA, A
 
   , ElType
   , InitialState(..)
@@ -37,6 +38,7 @@ module Text.XML.Validated.Types (
   , XmlIdsFromRoot(..)
   -- -- for debugging
   , Consume
+  , HEq
 
   ) where 
 
@@ -50,9 +52,9 @@ import Data.Either
 fromPT (PT _ v) = v
 {- We encode the compile time XML validation state in type as well
  First a el is created
- snd all attributes are added
- trd all subels and text elements are added
- last it is added to another el or the document
+ snd all attributes are allowed
+ trd all subels and text elements are allowed
+ last it is allowed to another el or the document
 
  These steps have been chosen because it's closest to String serialization
  which is the main purpose of this library
@@ -73,7 +75,7 @@ class (AttributeType attrType
   ) => AddAttribute el attrType where 
   addAttribute :: el -> attrType -> String -> el -- Sting = attr value FIXME: extend to all attr types - still proof of concept
 
--- after this no attributes can be added 
+-- after this no attributes can be allowed 
 class EndAttrs el el2 | el -> el2, el2 -> el where
   endAttrs :: el -> el2
 class AddEl el elc | el -> elc, elc -> el
@@ -96,7 +98,7 @@ class EndAttrsEndElement elType el elFinal | el -> elFinal, elFinal -> el where
 class AddText el text where
   addText :: el -> text -> el -- el, text node
 
--- after this no attributes can be added 
+-- after this no attributes can be allowed 
 class EndEl elType el elFinal | el -> elFinal, elFinal -> el where
   endEl :: elType -> el -> elFinal
 
@@ -149,25 +151,28 @@ instance (
     , InitialState elType initialState
     ) => CreateElT elType initialState el
 
-class ( AttributeType attrType
-      , AddAttribute el attrType
-      , StAddAttr attrType st st2
-      ) => AddAttrT attrType st st2 el 
+class AddAttrT attrType st st2 el 
       | st -> st2 where 
-  addAttrT :: PT st el -> attrType -> String -> PT st2 el -- Sting = attr value FIXME: extend to all attr types - still proof of concept
+  addAttrT :: PT st el -> attrType -> String -> PT st2 el
+  -- Sting = attr value FIXME: extend to all attr types - still proof of concept
+
+instance ( AttributeType attrType
+      , AddAttribute el attrType
+      , StAddAttr attrType (NYV (Element elType stA st HFalse)) st2
+      ) => AddAttrT attrType (NYV (Element elType stA st HFalse)) st2 el
+  where
   addAttrT (PT _ t) _ v = PT (undefined :: st2)
                           (addAttribute t (undefined :: attrType) v)
+     -- fail nicer error messages  
+instance ( YouCantAddAttributesAfterAddingContentTo elType
+      ) => AddAttrT attrType (NYV (Element elType stA st HTrue)) st2 el
+  where addAttrT = undefined -- shut up warning 
 
 
 class (AttributeType attrType
       ) => StAddAttr attrType state state2 | attrType state -> state2
 
 -- ========== type level implementation ============================== 
-
-class HFromMaybe a b r | a b -> r
-instance HFromMaybe (HJust a) b a
-instance HFromMaybe HNothing b b
-
 
 -- ========== adding sub elements (tags) =============================
 class AddElT est est' el el2 stc elc
@@ -208,16 +213,21 @@ class AddTextT el el2 text elst elst2 | el -> el2, el2 -> el, elst -> elst2 wher
 -- first child 
 instance (
     EndAttrs el el2
-  , StEndAttrs stA
+  , StEndAttrs elType stA
   , AddText el2 text
+  , Consume st PCDATA r
+  , Retry r PCDATA st'
   ) => AddTextT el el2 text (NYV (Element elType stA st  HFalse))
                             (NYV (Element elType stA st' HTrue))
   where
   addTextT (PT _ t) text = PT undefined $ addText (endAttrs t) text
 -- not first child
-instance ( AddText el text
+instance ( 
+    AddText el text
+  , Consume st PCDATA r
+  , Retry r PCDATA st'
   ) => AddTextT el el text (NYV (Element elType stA st  HTrue))
-                           (NYV (Element elType stA st HTrue))
+                           (NYV (Element elType stA st' HTrue))
   where
   addTextT (PT _ t) text = PT undefined $ addText t text
 
@@ -233,47 +243,47 @@ instance ( EndEl elType el el2
   where endElT (PT _ el) = PT undefined (endEl (undefined :: elType)  el)
 -- end elements without childs declared EMPTY 
 instance ( EndAttrsEndElement elType el el2
-         , StEndAttrs stA
+         , StEndAttrs elType stA
          ) => EndElT (NYV (Element elType stA EMPTY HFalse))
                      (Valid elType) el el2
   where endElT (PT _ el) = PT undefined (endAttrsEndElementDeclaredEmpty (undefined :: elType) el)
 -- end elements without childs not declared EMPTY 
 -- the following instances only differ in st, when using overlapping instances one would suffice
 instance ( EndAttrsEndElement elType el el2
-         , StEndAttrs stA
+         , StEndAttrs elType stA
          -- , ElEndable st
          ) => EndElT (NYV (Element elType stA C HFalse))
                      (Valid elType) el el2
   where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
 instance ( EndAttrsEndElement elType el el2
-         , StEndAttrs stA
+         , StEndAttrs elType stA
          -- , ElEndable st
          ) => EndElT (NYV (Element elType stA (Star a) HFalse))
                      (Valid elType) el el2
   where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
 instance ( EndAttrsEndElement elType el el2
-         , StEndAttrs stA
+         , StEndAttrs elType stA
          -- , ElEndable st
          ) => EndElT (NYV (Element elType stA (Query a) HFalse))
                      (Valid elType) el el2
   where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
   -- fail nicer error messages 
 instance ( EndAttrsEndElement elType el el2
-         , StEndAttrs stA
+         , StEndAttrs elType stA
          -- , ElEndable st
          , MoreElementsExpected (Elem a)
          ) => EndElT (NYV (Element elType stA (Elem a) HFalse))
                      (Valid elType) el el2
   where endElT _ = undefined -- shut up warning
 instance ( EndAttrsEndElement elType el el2
-         , StEndAttrs stA
+         , StEndAttrs elType stA
          -- , ElEndable st
          , MoreElementsExpected (Seq a b)
          ) => EndElT (NYV (Element elType stA (Seq a b) HFalse))
                      (Valid elType) el el2
   where endElT _ = undefined -- shut up warning
 instance ( EndAttrsEndElement elType el el2
-         , StEndAttrs stA
+         , StEndAttrs elType stA
          -- , ElEndable st
          , MoreElementsExpected (Or a b)
          ) => EndElT (NYV (Element elType stA (Or a b) HFalse))
@@ -283,16 +293,15 @@ instance ( EndAttrsEndElement elType el el2
 -- ========== the uglier part, the validation by transforming states
 
 -- ========== attributes stuff =======================================
--- add attribute to added list, fail if it has already been added
+-- add attribute to allowed list, fail if it has already been allowed
 -- remove attr from recquired list, add it to attrs list 
 instance (
     AttributeType attrType
-  , HMemberM attrType req r -- remove attr 
-  , HFromMaybe r req req'
-  , HMember added attrType HFalse -- don't allow adding elements twice 
+  , HMemberM (A attrType) req (HJust req') -- remove attr 
+  , HMemberM (A attrType) allowed (HJust allowed') -- remove attr 
   ) => StAddAttr attrType
-                 (NYV (Element elType (req, added) st hcs))
-                 (NYV (Element elType (req', (HCons attrType added)) st hcs))
+                 (NYV (Element elType (req, allowed) st hcs))
+                 (NYV (Element elType (req', allowed') st hcs))
 
 -- ========== elements and subelements / consume classes =============
 
@@ -312,12 +321,11 @@ instance ( MoreElementsExpected (Elem a)) => ElEndable (Elem a)
 instance ( MoreElementsExpected (Seq a b)) => ElEndable (Seq a b)
 instance ( MoreElementsExpected (Or a b))  => ElEndable (Or a b)
 
-class StEndAttrs elst
-instance  StEndAttrs (HNil, added)
--- instance  StEndAttrs () -- already ended 
+class StEndAttrs elType elst
+instance  StEndAttrs elType (HNil, allowed)
   -- fail nicer error messages
-instance  ( RequiredAttributesMissing (HCons a b)
-          ) => StEndAttrs ((HCons a b), added)
+instance  ( RequiredAttributesMissing elType (HCons a b)
+          ) => StEndAttrs elType ((HCons a b), allowed)
 
 -- ========== adding elements etc .. ================================= 
 
@@ -330,7 +338,7 @@ instance  (
 
 -- retry errors and retries consuming element on result (R x) 
 class Retry st el st' | st el -> st'
-instance Retry C el C -- alread done, nothing can be added
+instance Retry C el C -- alread done, nothing can be allowed
 instance Retry (CS st) el st -- alread done, continue with state st
 instance ( -- retry 
   Consume st el r
@@ -353,6 +361,8 @@ data Seq a tail
 data EMPTY         -- see comment on EndAttrsEndElement 
 data ANY           -- any element 
 data Elem elType   -- match an element 
+data A attr        -- but attributes in a box to make type level comparison easier 
+data PCDATA        -- add text 
 -- modifier
 data Query content -- ^ Zero Or One
 data Star content  -- ^ Zero Or More
@@ -374,11 +384,13 @@ class Consume st el r | st el -> r -- result is on of C,CS,R,F
 
 -- element 
 instance Consume ANY el C
-instance ( TypeToNat el elNr
-         , TypeToNat el' elNr'
-         , HEq elNr elNr' r'
+instance ( TypeToNat el n
+         , TypeToNat el' n'
+         , HEq n n' r'
          , HCond r' C (F (ExpectedButGot el el')) r
          ) => Consume (Elem el) el' r
+instance Consume PCDATA PCDATA C
+instance Consume ANY PCDATA C
 
 -- list consumption
 class LConsume isConsumed b r | isConsumed b -> r 
@@ -472,8 +484,12 @@ data ExpectedButGot a b
 class MoreElementsExpected a
 class RequireAttrubtes a
 class NoMoreElementsExpectedOrWrongElement a
-class RequiredAttributesMissing req
+class RequiredAttributesMissing elType req
+class YouCantAddAttributesAfterAddingContentTo elType
 -- class Fail (from HList) 
 
 --  ========= type level equality helper =============================
 class TypeToNat typE nr | typE -> nr
+
+instance ( TypeToNat a n , TypeToNat b n' , HEq n n' r
+         ) => HEq (A a) (A b) r

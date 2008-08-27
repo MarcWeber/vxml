@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Text.XML.Validated.Util where
-import Language.Haskell.TH.All
+import Language.Haskell.TH
 import Data.Char
 import Data.HList
 import Language.Haskell.TH.Lib
@@ -26,7 +26,7 @@ undType t = sigE (varE 'undefined) t
 
 -- contstruct HList 
 hlist [] = conT ''HNil
-hlist (x:xs) = appTn (conT ''HCons) [conT x, hlist xs]
+hlist (x:xs) = appTn (conT ''HCons) [x, hlist xs]
 -- contstruct Seq list
 list r m [x] = error $ m ++ " list with only on element! " ++ ( pprint $ unsafePerformIO $ runQ x)
 list t m [x,y] = appTn t [x, y]

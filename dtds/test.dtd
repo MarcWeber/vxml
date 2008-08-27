@@ -1,3 +1,14 @@
+<!ELEMENT root ((
+                choice 
+                | sequence
+                | testcase1
+                | testcase2
+                | testcase3
+                | a
+                )+)>
+<!ATTLIST root
+  id          CDATA             #IMPLIED
+  >
 <!ELEMENT a EMPTY>
 <!ATTLIST a
   id          ID             #IMPLIED
@@ -31,14 +42,3 @@
                     , c )
                     >
 
-<!ELEMENT root ((
-                choice 
-                | sequence
-                | testcase1
-                | testcase2
-                | testcase3
-                | a
-                )+)>
-<!ATTLIST root
-  id          CDATA             #IMPLIED
-  >

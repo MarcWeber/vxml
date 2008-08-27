@@ -1,9 +1,8 @@
+{-# OPTIONS_GHC -fcontext-stack=500 #-}
 {-# OPTIONS_GHC -XTemplateHaskell -XStandaloneDeriving -XTypeSynonymInstances -XMultiParamTypeClasses -XFunctionalDependencies #-}
 {-# LANGUAGE OverlappingInstances, UndecidableInstances,  FlexibleContexts,  FlexibleContexts,  FlexibleInstances,  EmptyDataDecls #-}
 module Main where
-import Data.HList
-import Language.Haskell.TH.All
-import Language.Haskell.TH.FixedPpr
+import Language.Haskell.TH
 import Control.Monad
 import Directory
 import Control.Exception
@@ -78,14 +77,16 @@ dummy = undefined
 --  )
 main = do
   -- [arg] <- getArgs
-  let arg = "/pr/haskell/vxml/dtds/xhtml1-20020801/DTD/xhtml1-strict.dtd"
-  let arg = "/pr/haskell/vxml/dtds/test.dtd"
   -- readdtd arg >>= \r -> case r of
     -- left a -> putstrln a
     -- right (just (dtd name mbextid decls))  -> mapm_ print $ zipelements decls
-  putStrLn $ xmlDocT $ addAttrT (addTextT (addElT (addElT root b) a) "abc")
-       
-
+  -- putStrLn $ xmlDocT $ addAttrT (addTextT (addElT (addElT root b) a) "abc") (undefined :: Id_A) "test"
+  putStrLn $ xmlDocT $ addElT ( addElT (addAttrT (root) (undefined :: Id_A) "test")
+                                       (addAttrT b (undefined :: Id_A) "atb")  )
+                              a
+  -- putStrLn (show (undefined :: (HEq Id_A Id_A a) => a ))
+  -- putStrLn (show (undefined :: (TypeToNat A_T a) => a ))
+  -- putStrLn (show (undefined :: (TypeToNat B_T a) => a ))
   -- putStrLn $ fromPT $ endElT $  createElT (undefined :: Root_T)
   print "end"
 

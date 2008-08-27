@@ -1,5 +1,5 @@
 <!DOCTYPE root PUBLIC "vxml-test" "../dtds/test.dtd">
-<root>
+<root id="abc">
   <!-- sequnce 1 -->
   <testcase1>
     <a></a><b></b><c></c>

@@ -25,7 +25,21 @@ build-depends:   haskell98
                 , HaXml >= 1.19
                 , filepath
                 , mtl
-                , derive
                 , pretty
                 , containers
+                , template-haskell
+
+
+executable:     run-testcases
+main-is:        run-testcases.hs
+hs-source-dirs: test, src
+build-depends:   haskell98
+                , base
+                , HList
+                , HaXml >= 1.19
+                , filepath
+                , mtl
+                , pretty
+                , containers
+                , HUnit
                 , template-haskell
