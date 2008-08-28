@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -fcontext-stack=100 #-}
 {-# LANGUAGE NoMonomorphismRestriction,  PatternSignatures, ScopedTypeVariables, EmptyDataDecls,
     FunctionalDependencies, FlexibleInstances, FlexibleContexts,
-    MultiParamTypeClasses, UndecidableInstances, OverlappingInstances #-}
+    MultiParamTypeClasses, UndecidableInstances #-}
 
 module Text.XML.Validated.Types (
   -- Validated -- contains the validated xml result
@@ -267,6 +267,12 @@ instance ( EndAttrsEndElement elType el el2
          ) => EndElT (NYV (Element elType stA (Query a) HFalse))
                      (Valid elType) el el2
   where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
+instance ( EndAttrsEndElement elType el el2
+         , StEndAttrs elType stA
+         -- , ElEndable elType st
+         ) => EndElT (NYV (Element elType stA ANY HFalse))
+                     (Valid elType) el el2
+  where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
   -- fail nicer error messages 
 instance ( EndAttrsEndElement elType el el2
          , StEndAttrs elType stA
@@ -334,6 +340,7 @@ instance ElEndable elType C
 instance ElEndable elType EMPTY
 instance ElEndable elType (Star a)
 instance ElEndable elType (Query a)
+instance ElEndable elType ANY
 instance (ElEndable elType a, ElEndable elType b
           ) => ElEndable elType (Seq a b)
   -- fail nicer error messages 
@@ -402,14 +409,13 @@ data F a    -- consume failure, a is reason
 class Consume st el r | st el -> r -- result is on of C,CS,R,F 
 
 -- element 
-instance Consume ANY el C
+instance Consume ANY el (CS ANY)
 instance ( TypeToNat el n
          , TypeToNat el' n'
          , HEq n n' r'
          , HCond r' C (F (ExpectedButGot el el')) r
          ) => Consume (Elem el) el' r
 instance Consume PCDATA PCDATA C
-instance Consume ANY PCDATA C
 
 -- sequence consumption
 class SeqConsume isConsumed b r | isConsumed b -> r 
