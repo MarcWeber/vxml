@@ -12,6 +12,7 @@ build-depends:   haskell98
                 , mtl
                 , containers
                 , template-haskell
+                , directory
 exposed-modules: Text.XML.Validated.Types
                  Text.XML.Validated.Instance.String
 hs-source-dirs:  src
@@ -43,3 +44,4 @@ build-depends:   haskell98
                 , containers
                 , HUnit
                 , template-haskell
+                , directory
