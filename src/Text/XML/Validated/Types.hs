@@ -17,6 +17,7 @@ module Text.XML.Validated.Types (
   , XmlDocT(..)
 
   -- implementation for different result types: 
+  -- see example in Instances
   , CreateEl(..)
   , AddAttribute(..)
   , EndAttrs(..)
@@ -28,18 +29,16 @@ module Text.XML.Validated.Types (
   , XmlIds(..)
 
 
-  -- exported for utils and TH, should be moved in its own module ?
-  , Seq, Or, ANY, Element, C, Query, Star, EMPTY, PCDATA, A
+  -- exported for utils and TH, you should not have to use them
+  , Seq, Or, ANY, Element, C, Query, Star, EMPTY, PCDATA, A, AS
 
   , ElType
   , InitialState(..)
   , AttributeType
   , PT, NYV, Elem, TypeToNat
   , XmlIdsFromRoot(..)
-  -- -- for debugging
-  , Consume
-  , HEq
-
+  -- for debugging
+  -- , debugEl
   ) where 
 
 import Data.HList
@@ -73,7 +72,7 @@ class CreateEl elType el where
 
 class (AttributeType attrType
   ) => AddAttribute el attrType where 
-  addAttribute :: el -> attrType -> String -> el -- Sting = attr value FIXME: extend to all attr types - still proof of concept
+  addAttribute :: el -> attrType -> String -> el -- String = attr value FIXME: extend to all attr types - still proof of concept
 
 -- after this no attributes can be allowed 
 class EndAttrs el el2 | el -> el2, el2 -> el where
@@ -119,9 +118,9 @@ instance ( XmlDoc rootElType el doc
         ) => XmlDocT (Valid rootElType) el doc where
   xmlDocT (PT _ e) = xmlDoc (undefined :: rootElType) (xmlIds (undefined :: rootElType)) e
 -- instance not yet ended root elemnt 
-instance ( EndElT (NYV (elType stA st hchs)) st' el el2
+instance ( EndElT (NYV (Element elType stA st hchs)) st' el el2
         , XmlDocT st' el2 doc
-        ) => XmlDocT (NYV (elType stA st hchs)) el doc where
+        ) => XmlDocT (NYV (Element elType stA st hchs)) el doc where
   xmlDocT = xmlDocT . endElT
                
 
@@ -154,12 +153,13 @@ instance (
 class AddAttrT attrType st st2 el 
       | st -> st2 where 
   addAttrT :: PT st el -> attrType -> String -> PT st2 el
-  -- Sting = attr value FIXME: extend to all attr types - still proof of concept
+  -- String = attr value FIXME: extend to all attr types - still proof of concept
 
 instance ( AttributeType attrType
       , AddAttribute el attrType
-      , StAddAttr attrType (NYV (Element elType stA st HFalse)) st2
-      ) => AddAttrT attrType (NYV (Element elType stA st HFalse)) st2 el
+      , StAddAttr elType attrType stA stA'
+      ) => AddAttrT attrType (NYV (Element elType stA  st HFalse)) 
+                             (NYV (Element elType stA' st HFalse)) el
   where
   addAttrT (PT _ t) _ v = PT (undefined :: st2)
                           (addAttribute t (undefined :: attrType) v)
@@ -170,7 +170,7 @@ instance ( YouCantAddAttributesAfterAddingContentTo elType
 
 
 class (AttributeType attrType
-      ) => StAddAttr attrType state state2 | attrType state -> state2
+      ) => StAddAttr elType attrType stA stA2 | attrType stA -> stA2
 
 -- ========== type level implementation ============================== 
 
@@ -237,7 +237,7 @@ class EndElT st st' el el2| st -> st', el -> el2, el2 -> el where
            -> (PT st' el2)
 -- end element with childs 
 instance ( EndEl elType el el2
-         , ElEndable st
+         , ElEndable elType st
          ) => EndElT (NYV (Element elType stA st HTrue))
                      (Valid elType) el el2
   where endElT (PT _ el) = PT undefined (endEl (undefined :: elType)  el)
@@ -251,41 +251,41 @@ instance ( EndAttrsEndElement elType el el2
 -- the following instances only differ in st, when using overlapping instances one would suffice
 instance ( EndAttrsEndElement elType el el2
          , StEndAttrs elType stA
-         -- , ElEndable st
+         -- , ElEndable elType st
          ) => EndElT (NYV (Element elType stA C HFalse))
                      (Valid elType) el el2
   where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
 instance ( EndAttrsEndElement elType el el2
          , StEndAttrs elType stA
-         -- , ElEndable st
+         -- , ElEndable elType st
          ) => EndElT (NYV (Element elType stA (Star a) HFalse))
                      (Valid elType) el el2
   where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
 instance ( EndAttrsEndElement elType el el2
          , StEndAttrs elType stA
-         -- , ElEndable st
+         -- , ElEndable elType st
          ) => EndElT (NYV (Element elType stA (Query a) HFalse))
                      (Valid elType) el el2
   where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
   -- fail nicer error messages 
 instance ( EndAttrsEndElement elType el el2
          , StEndAttrs elType stA
-         -- , ElEndable st
-         , MoreElementsExpected (Elem a)
+         -- , ElEndable elType st
+         , MoreElementsExpected elType (Elem a)
          ) => EndElT (NYV (Element elType stA (Elem a) HFalse))
                      (Valid elType) el el2
   where endElT _ = undefined -- shut up warning
 instance ( EndAttrsEndElement elType el el2
          , StEndAttrs elType stA
-         -- , ElEndable st
-         , MoreElementsExpected (Seq a b)
+         -- , ElEndable elType st
+         , MoreElementsExpected elType (Seq a b)
          ) => EndElT (NYV (Element elType stA (Seq a b) HFalse))
                      (Valid elType) el el2
   where endElT _ = undefined -- shut up warning
 instance ( EndAttrsEndElement elType el el2
          , StEndAttrs elType stA
-         -- , ElEndable st
-         , MoreElementsExpected (Or a b)
+         -- , ElEndable elType st
+         , MoreElementsExpected elType (Or a b)
          ) => EndElT (NYV (Element elType stA (Or a b) HFalse))
                      (Valid elType) el el2
   where endElT _ = undefined -- shut up warning
@@ -297,35 +297,54 @@ instance ( EndAttrsEndElement elType el el2
 -- remove attr from recquired list, add it to attrs list 
 instance (
     AttributeType attrType
-  , HMemberM (A attrType) req (HJust req') -- remove attr 
-  , HMemberM (A attrType) allowed (HJust allowed') -- remove attr 
-  ) => StAddAttr attrType
-                 (NYV (Element elType (req, allowed) st hcs))
-                 (NYV (Element elType (req', allowed') st hcs))
+  , -- remove attribute from required list
+    HMemberM (A attrType) req mreq
+  , HFromMaybe mreq req req'
+  , -- only allowed attributes 
+    HMember (A attrType) allowed ra
+  , CheckAllowedAttribute elType attrType ra
+  , -- no attribute may be added twice 
+    HMember (A attrType) added rd
+  , CheckDuplicateAttribute elType attrType rd
+  ) => StAddAttr elType attrType (AS req  allowed added)
+                                 (AS req' allowed (HCons (A attrType) added'))
+class HFromMaybe mb b r | mb b -> r
+instance  HFromMaybe HNothing b b
+instance  HFromMaybe (HJust a) b a
+class CheckAllowedAttribute elType attrType hbool
+instance CheckAllowedAttribute elType attrType HTrue
+instance ( UnallowedAttribute elType attrType
+         ) => CheckAllowedAttribute elType attrType HFalse
+class CheckDuplicateAttribute elType attrType hbool
+instance CheckDuplicateAttribute elType attrType HFalse
+instance ( DuplicateAttribute elType attrType
+         ) => CheckDuplicateAttribute elType attrType HTrue
 
 -- ========== elements and subelements / consume classes =============
 
 -- element content accept stuff
 data Element elType stAttributes elementsState hasChilds 
+data AS req allowed added -- attribute state 
 -- elType: the element type_T 
 -- hasChilds: HTrue or HFalse, is necessary to to know wether empty tags <br/> can be used
 
 -- ========== allowed to end element ? =============================== 
-class ElEndable a
-instance ElEndable C
-instance ElEndable EMPTY
-instance ElEndable (Star a)
-instance ElEndable (Query a)
+class ElEndable elType a
+instance ElEndable elType C
+instance ElEndable elType EMPTY
+instance ElEndable elType (Star a)
+instance ElEndable elType (Query a)
+instance (ElEndable elType a, ElEndable elType b
+          ) => ElEndable elType (Seq a b)
   -- fail nicer error messages 
-instance ( MoreElementsExpected (Elem a)) => ElEndable (Elem a)
-instance ( MoreElementsExpected (Seq a b)) => ElEndable (Seq a b)
-instance ( MoreElementsExpected (Or a b))  => ElEndable (Or a b)
+instance ( MoreElementsExpected elType (Elem a)) =>  ElEndable elType (Elem a)
+instance ( MoreElementsExpected elType (Or a b))  => ElEndable elType (Or a b)
 
 class StEndAttrs elType elst
-instance  StEndAttrs elType (HNil, allowed)
+instance  StEndAttrs elType (AS HNil allowed added)
   -- fail nicer error messages
 instance  ( RequiredAttributesMissing elType (HCons a b)
-          ) => StEndAttrs elType ((HCons a b), allowed)
+          ) => StEndAttrs elType (AS (HCons a b) allowed added)
 
 -- ========== adding elements etc .. ================================= 
 
@@ -392,16 +411,16 @@ instance ( TypeToNat el n
 instance Consume PCDATA PCDATA C
 instance Consume ANY PCDATA C
 
--- list consumption
-class LConsume isConsumed b r | isConsumed b -> r 
-instance LConsume C            b (CS b)        -- head consumed, return tail
-instance LConsume (CS a)       b (CS (Seq a b))-- head consumed element, but there are more to be consumed
-instance LConsume (F x)        b (F x)         -- head failed consuming element
-instance LConsume (RSKIP)      b (R b)         -- retry with head skipped
-instance LConsume (R a)        b (R (Seq a b)) -- retry with new head state eg add b to head (a*,b), new head will become just b
+-- sequence consumption
+class SeqConsume isConsumed b r | isConsumed b -> r 
+instance SeqConsume C            b (CS b)        -- head consumed, return tail
+instance SeqConsume (CS a)       b (CS (Seq a b))-- head consumed element, but there are more to be consumed
+instance SeqConsume (F x)        b (F x)         -- head failed consuming element
+instance SeqConsume (RSKIP)      b (R b)         -- retry with head skipped
+instance SeqConsume (R a)        b (R (Seq a b)) -- retry with new head state eg add b to head (a*,b), new head will become just b
 
 instance ( Consume a el r
-         , LConsume r b res
+         , SeqConsume r b res
          ) => Consume (Seq a b) el res
 
 -- choice consumption
@@ -443,24 +462,24 @@ instance ( Consume a el r
          ) => Consume (Or a b) el res
 -- modifier 
 -- Query 
-class QConsume r res | r -> res -- helper function 
-instance QConsume C C
-instance QConsume (CS a) (CS a)
-instance QConsume (R a)  (Query (R a))
-instance QConsume (RSKIP) RSKIP
-instance QConsume (F a)   RSKIP
+class QueryConsume r res | r -> res -- helper function 
+instance QueryConsume C C
+instance QueryConsume (CS a) (CS a)
+instance QueryConsume (R a)  (Query (R a))
+instance QueryConsume (RSKIP) RSKIP
+instance QueryConsume (F a)   RSKIP
 instance ( Consume a el r
-         , QConsume r res
+         , QueryConsume r res
          ) => Consume (Query a) el res
 -- Star
-class SConsume a r res | a r -> res -- helper function 
-instance SConsume a C (CS (Star a)) -- next cycle 
-instance SConsume a (CS b) (CS (StarB b a)) -- backup content 
-instance SConsume a (R b)  (R (StarB b a))
-instance SConsume a (RSKIP) RSKIP
-instance SConsume a (F a)   RSKIP
+class StarConsume a r res | a r -> res -- helper function 
+instance StarConsume a C (CS (Star a)) -- next cycle 
+instance StarConsume a (CS b) (CS (StarB b a)) -- backup content 
+instance StarConsume a (R b)  (R (StarB b a))
+instance StarConsume a (RSKIP) RSKIP
+instance StarConsume a (F b)   RSKIP
 instance ( Consume a el r
-         , SConsume a r res
+         , StarConsume a r res
          ) => Consume (Star a) el res
 
 -- StarB
@@ -481,12 +500,17 @@ data ExpectedButGot a b
 
 -- never implement instances for these.. either the lib is buggy or your data
 -- does'nt validate against dtd 
-class MoreElementsExpected a
+class MoreElementsExpected elType a
 class RequireAttrubtes a
 class NoMoreElementsExpectedOrWrongElement a
 class RequiredAttributesMissing elType req
 class YouCantAddAttributesAfterAddingContentTo elType
+class UnallowedAttribute elType attrType
+class DuplicateAttribute elType attrType
 -- class Fail (from HList) 
+
+debugEl :: (Fail x) => (PT x a) -> b
+debugEl = undefined
 
 --  ========= type level equality helper =============================
 class TypeToNat typE nr | typE -> nr

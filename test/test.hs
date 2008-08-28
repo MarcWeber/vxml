@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fcontext-stack=500 #-}
 {-# OPTIONS_GHC -XTemplateHaskell -XStandaloneDeriving -XTypeSynonymInstances -XMultiParamTypeClasses -XFunctionalDependencies #-}
-{-# LANGUAGE OverlappingInstances, UndecidableInstances,  FlexibleContexts,  FlexibleContexts,  FlexibleInstances,  EmptyDataDecls #-}
+{-# LANGUAGE NoMonomorphismRestriction,  OverlappingInstances, UndecidableInstances,  FlexibleContexts,  FlexibleContexts,  FlexibleInstances,  EmptyDataDecls #-}
 module Main where
 import Language.Haskell.TH
 import Control.Monad
@@ -57,22 +57,16 @@ readDTD file = do
 -- HaXmL only returns a loose list of element and attr list declarations 
 -- this functions ties them.
 
-$( dtdToTypes "dtds/test_simple.dtd" 
+$( 
+ dtdToTypes "dtds/xhtml1-20020801/DTD/xhtml1-strict_onefile.dtd" 
+ --   dtdToTypes "dtds/test_simple.dtd" 
               (XmlIds (Just "-//W3C//DTD XHTML 1.0 Strict//EN") 
                       (Just "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd") ) 
  )
 
 
 
-dummy :: ( Consume (Seq (Or  (Elem  A_T) (Elem B_T)) 
-                        (Star (Or  (Elem  A_T) (Elem B_T)))
-                    )
-                    B_T r 
-         , Consume r A_T r'
-         , Consume r' A_T r2
-        ) => r2
-dummy = undefined
-
+(<<) = addElT
 
 --  )
 main = do
@@ -81,14 +75,17 @@ main = do
     -- left a -> putstrln a
     -- right (just (dtd name mbextid decls))  -> mapm_ print $ zipelements decls
   -- putStrLn $ xmlDocT $ addAttrT (addTextT (addElT (addElT root b) a) "abc") (undefined :: Id_A) "test"
-  putStrLn $ xmlDocT $ addElT ( addElT (addAttrT (root) (undefined :: Id_A) "test")
-                                       (addAttrT b (undefined :: Id_A) "atb")  )
-                              a
+  -- putStrLn $ xmlDocT $  root `id_A` "test"
+  -- putStrLn $ xmlDocT $ addElT ( root `id_A` "test")
+  --                              a
+  putStrLn $ xmlDocT $ (addElT html  ( Main.head `addElT` (title) ) )
+                          `addElT` ( body )
+
+
   -- putStrLn (show (undefined :: (HEq Id_A Id_A a) => a ))
   -- putStrLn (show (undefined :: (TypeToNat A_T a) => a ))
   -- putStrLn (show (undefined :: (TypeToNat B_T a) => a ))
   -- putStrLn $ fromPT $ endElT $  createElT (undefined :: Root_T)
   print "end"
-
 
 

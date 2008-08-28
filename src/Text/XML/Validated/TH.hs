@@ -20,6 +20,9 @@ import System.IO
 import Text.XML.Validated.Types as T
 import Control.Monad.State as ST
 
+showGeneratedCode = False
+mytrace _ a = a
+
 -- if there is an attribute called foo and an elemente called foo
 -- teh same type can be used because they are used in different contexts
 -- However we can't declare them twice, that's why the list defined is kept
@@ -38,6 +41,7 @@ zipElements list =
             in rootFst n . map addD . M.toList . M.fromListWithKey combine $ filtered
   where toMbTuple (Element eDecl@(ElementDecl n _)) = Just (n , (Just eDecl, Nothing) )
         toMbTuple (AttList aDecl@(AttListDecl n _)) = Just (n , (Nothing, Just aDecl) )
+        toMbTuple _ = trace ("!! warning, still Non-exhaustive patterns in toMbTuple in TH.hs") Nothing
         combine _ (Nothing, Just a) (Just e, Nothing) = (Just e, Just a)
         combine _ (Just e, Nothing) (Nothing, Just a) = (Just e, Just a)
         combine k _ _ = error $ "something went wrong: one element or attr named "
@@ -59,10 +63,10 @@ instanceOfSimple a b =
 
 
 instanceOfTypeToNat :: Maybe String -> TH.Name -> DecQ
-instanceOfTypeToNat Nothing name = 
+instanceOfTypeToNat Nothing name =
         instanceD (cxt [])
                     (appTn (conT ''T.TypeToNat) [conT name, conT ''HZero])  []
-instanceOfTypeToNat (Just pred) name = 
+instanceOfTypeToNat (Just pred) name =
         let nr = mkName "nr"
         in instanceD (cxt [
                   appTn (conT ''TypeToNat) [conT (mkName pred), (varT nr)]
@@ -79,7 +83,7 @@ conEl = (conT . elementHaskellName) -- private
 elementState :: String -> ContentSpec -> TypeQ
 elementState el H.EMPTY = conT ''T.EMPTY
 elementState el ANY = conT ''T.ANY
-elementState el (Mixed PCDATA) = addMod Star $ choiceList $ [conT ''T.PCDATA]
+elementState el (Mixed PCDATA) = addMod Star $ conT ''T.PCDATA
 elementState el (Mixed (PCDATAplus list)) = addMod Star $ choiceList $
                                               (conT ''T.PCDATA)
                                               : [ appT (conT ''T.Elem) (conEl n)
@@ -94,10 +98,10 @@ sp (Seq list mod)      = addMod mod $ seqList $ map sp list
 addMod :: Modifier -> TypeQ -> TypeQ
 addMod None x = x
 addMod Query x = appT (conT ''Query) x
-addMod Star x = appT (conT 'Star) x
+addMod Star x = appT (conT ''Star) x
 addMod Plus x =  seqList [x, appT (conT ''Star) x ]
 -- (x)+ is rewritten seq [x, x*]
--- only for debugging: 
+-- only for debugging:
 deriving instance Show Mixed
 deriving instance Show ContentSpec
 deriving instance Show TokenizedType
@@ -154,11 +158,15 @@ toCode (n, (Just (ElementDecl _ content), Just (AttListDecl _ attdefList) ) ) = 
                                  | (AttDef name attType REQUIRED) <- attdefList ]
          allowedAttributes = hlist [ attr $ conT $ attrHaskellName name
                                  | (AttDef name attType _) <- attdefList ]
-         state = trace (show attdefList) $ appT (conT ''T.NYV) $
-                                                appTn (conT ''T.Element) [conT elDataName
-                                                                         , appTn (tupleT 2) [reqAttributes, allowedAttributes] 
-                                                                         , elementState n content
-                                                                         , conT ''HFalse ]
+         state = mytrace (show attdefList) $ appT (conT ''T.NYV) $
+                                                appTn (conT ''T.Element)
+                                                      [conT elDataName
+                                                      , appTn (conT ''AS)
+                                                         [reqAttributes, allowedAttributes
+                                                         , hlist [] {- added -}]
+                                                      , elementState n content
+                                                      , conT ''HFalse
+                                                      ]
     in instanceD (cxt [])  -- (CreateEl <type> el)
                 (appTn (conT ''T.InitialState) [conT elDataName, state])  []
            -- [funD 'T.initialState [ clause [wildP] (normalB ( varE 'undefined )) []] ]
@@ -180,20 +188,28 @@ dtdToTypes file (XmlIds pub sys) = (flip evalStateT) (initialDataState) $ do
     Left a -> fail a
     Right (Just (DTD name mbExtId decls))  -> do
     let zipped = zipElements decls
-    let attrNamesUniq = nub $ map (\(AttDef n _ _) -> n) 
+    let attrNamesUniq = nub $ map (\(AttDef n _ _) -> n)
                             $ concatMap ( (\(Just (AttListDecl _ l)) -> l) . snd . snd ) zipped
-    -- shared attribute names and instances 
-    attrDecs <- liftM concat $ mapM (\ n -> 
+    -- shared attribute names and instances
+    attrDecs <- liftM concat $ mapM (\ n ->
                   do let name = attrHaskell n
                          nameN = mkName name
                      mbPred <- gets mPred
                      modify (\s -> s { mPred = Just name } )
-                     ST.lift $ do 
+                     ST.lift $ do
                        d <- dataD (cxt []) nameN [] [] []
                        s <- instanceShow nameN n
                        i <- instanceOfSimple (conT ''AttributeType) (conT nameN)
+                       add <- let [el,val] = map mkName ["el", "val"]
+                              in  funD (mkName $ fstLower name)
+                                    [ clause [ varP el, varP val ]
+                                        (normalB $ appEn (varE 'addAttrT)
+                                                          [ varE el
+                                                          , sigE (varE 'undefined) (conT $ nameN)
+                                                          , varE val ]
+                                        ) [] ]
                        n <- instanceOfTypeToNat mbPred nameN
-                       return [d,s,i,n] ) attrNamesUniq
+                       return [d,s,i,n,add] ) attrNamesUniq
 
     -- | elements and attribute data belonging to it
     types <- liftM concat $ mapM toCode zipped
@@ -207,7 +223,7 @@ dtdToTypes file (XmlIds pub sys) = (flip evalStateT) (initialDataState) $ do
         ]
 
     let all = attrDecs ++ types ++ docClass
-    ST.lift $ runIO $ do -- for debugging purposes print generated code
+    when showGeneratedCode $ ST.lift $ runIO $ do -- for debugging purposes print generated code
        putStrLn "============= generated code ========================================="
        mapM_ (putStrLn . pprint) all
        putStrLn "============= generated code end ====================================="
