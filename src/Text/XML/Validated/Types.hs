@@ -184,14 +184,14 @@ instance (
     EndAttrs el el2
   , AddEl el2 elc
   , Consume st (Elem celType) r
-  , Retry r (Elem celType) st'
+  , Retry elType r (Elem celType) st'
   ) => AddElT (NYV (Element elType stA st HFalse)) (NYV (Element elType stA st' HTrue)) el el2
               (Valid celType) elc where
  addElT (PT _ t) (PT _ c) = PT (undefined :: est') $ addEl (endAttrs t) c
 -- not first child
 instance (
     AddEl el elc
-  , Retry r (Elem celType) st'
+  , Retry elType r (Elem celType) st'
   , Consume st (Elem celType) r
   ) => AddElT (NYV (Element elType stA st HTrue)) (NYV (Element elType stA st' HTrue)) el el
               (Valid celType) elc where
@@ -199,7 +199,7 @@ instance (
 -- validate child 
 instance (
     AddEl el elc'
-  , Retry r celType st'
+  , Retry elType r (Elem celType) st'
   , Consume st (Elem celType) r
   , EndElT (NYV (Element celType cstA cst chchs)) (Valid celType) elc elc'
   , AddElT (NYV (Element elType  stA st hchs)) (NYV (Element elType stA st' HTrue)) el el
@@ -217,7 +217,7 @@ instance (
   , StEndAttrs elType stA
   , AddText el2 text
   , Consume st PCDATA r
-  , Retry r PCDATA st'
+  , Retry elType r PCDATA st'
   ) => AddTextT el el2 text (NYV (Element elType stA st  HFalse))
                             (NYV (Element elType stA st' HTrue))
   where
@@ -226,7 +226,7 @@ instance (
 instance ( 
     AddText el text
   , Consume st PCDATA r
-  , Retry r PCDATA st'
+  , Retry elType r PCDATA st'
   ) => AddTextT el el text (NYV (Element elType stA st  HTrue))
                            (NYV (Element elType stA st' HTrue))
   where
@@ -356,17 +356,17 @@ instance  ( RequiredAttributesMissing elType (HCons a b)
           ) => StEndAttrs elType (AS (HCons a b) allowed added)
 
 -- retry errors and retries consuming element on result (R x) 
-class Retry st el st' | st el -> st'
-instance Retry C el C -- alread done, nothing can be allowed
-instance Retry (CS st) el st -- alread done, continue with state st
+class Retry elType st el st' | st el -> st'
+instance Retry elType C el C -- alread done, nothing can be allowed
+instance Retry elType (CS st) el st -- alread done, continue with state st
 instance ( -- retry 
   Consume st el r
-  , Retry r el st'
-  ) => Retry (R st) el  st'
+  , Retry elType r el st'
+  ) => Retry elType (R st) el  st'
   -- fail nicer error messages 
-instance ( NoMoreElementsExpectedOrWrongElement el
-         ) => Retry RSKIP el ()
-instance ( Fail x ) => Retry (F x) el ((),())
+instance ( NoMoreElementsExpectedOrWrongElement elType el
+         ) => Retry elType RSKIP el Failure
+instance ( Fail x ) => Retry elType (F x) el Failure
 
 
 -- content
@@ -509,6 +509,7 @@ instance ( Consume a el r
          ) => Consume (StarB a b) el res
 
 -- ========== errors ================================================= 
+data Failure
 data BothFailed a b
 data ExpectedButGot a b
 data GotPCDATAButExpected a
@@ -518,7 +519,7 @@ data ExpectedPCDATABUtGot a
 -- does'nt validate against dtd 
 class MoreElementsExpected elType a
 class RequireAttrubtes a
-class NoMoreElementsExpectedOrWrongElement a
+class NoMoreElementsExpectedOrWrongElement elType a
 class RequiredAttributesMissing elType req
 class YouCantAddAttributesAfterAddingContentTo elType
 class UnallowedAttribute elType attrType

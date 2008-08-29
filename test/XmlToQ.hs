@@ -30,10 +30,10 @@ xmlToQ file =  do
     app a b = appE (varE (mkName a)) b
     elemToQ (Elem en atts content) =
       -- attributes 
-      let elemWithAtts = foldr (\(an, attV) a -> appEn ( varE $ mkName $ fstLower $ attrHaskell an ) 
+      let elemWithAtts = foldl (\a (an, attV) -> appEn ( varE $ mkName $ fstLower $ attrHaskell an ) 
                                                   [a, ( stringE $ show attV )] ) (varE $ mkName en)  atts
       -- content 
-      in foldr (\c el -> addContent c el) elemWithAtts content
+      in foldl (\el c -> addContent c el) elemWithAtts content
     -- addContent :: Content Posn -> ExpQ ->ExpQ 
     addContent (CElem elem _) el = appEn (varE $ mkName "addElT") [ el, elemToQ elem ]
                -- TODO handle bool 
