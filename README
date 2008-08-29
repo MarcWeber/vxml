@@ -1,4 +1,15 @@
-vhtml, my attempt to create a validating xml library
+vxml, my attempt to create a validating xml library
 ====================================================
 
-Many thanks to Saizan for heling a tremendous lot!
+Howto install:
+  You'll need a patched version (http://mawercer.de/~nix/repos/haxml.tar.gz) of HaXml
+  to be able to read the provided
+  dtds/xhtml1-20020801/DTD/xhtml1-strict_onefile.dtd file.
+
+
+
+Credits to:
+  * Saizan for helping me figuring out why ghc didn't find the right instance more
+    than once
+  * Oleg Kiselyov for telling me about the fastest TypeEq implementation. Before
+    that typechecking a minimal xhtml document took hours, it takes 10sec now
