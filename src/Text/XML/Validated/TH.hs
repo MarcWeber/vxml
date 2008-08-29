@@ -68,6 +68,7 @@ instanceOfSimple a b =
 
 
 
+#ifdef TypeToNatTypeEq
 instanceOfTypeToNat :: Maybe String -> TH.Name -> DecQ
 instanceOfTypeToNat Nothing name =
         instanceD (cxt [])
@@ -78,6 +79,7 @@ instanceOfTypeToNat (Just pred) name =
                   appTn (conT ''TypeToNat) [conT (mkName pred), (varT nr)]
                 ])  -- (CreateEl <type> el)
                 (appTn (conT ''T.TypeToNat) [conT name, appT (conT ''HSucc) (varT nr)])  []
+#endif
 
 attrHaskell = (++ "_A") . fstUpper
 attrHaskellName = mkName . attrHaskell
@@ -177,9 +179,10 @@ toCode (n, (Just (ElementDecl _ content), Just (AttListDecl _ attdefList) ) ) = 
                 (appTn (conT ''T.InitialState) [conT elDataName, state])  []
            -- [funD 'T.initialState [ clause [wildP] (normalB ( varE 'undefined )) []] ]
 
+#ifdef TypeToNatTypeEq
     , -- type to nat
     instanceOfTypeToNat mbPred elDataName
-
+#endif
     ]
 
 class InitialState elType state where
@@ -214,8 +217,14 @@ dtdToTypes file (XmlIds pub sys) = (flip evalStateT) (initialDataState) $ do
                                                           , sigE (varE 'undefined) (conT $ nameN)
                                                           , varE val ]
                                         ) [] ]
+#ifdef TypeToNatTypeEq
                        n <- instanceOfTypeToNat mbPred nameN
-                       return [d,s,i,n,add] ) attrNamesUniq
+#endif
+                       return [d,s,i
+#ifdef TypeToNatTypeEq
+                              ,n
+#endif
+                              ,add] ) attrNamesUniq
 
     -- | elements and attribute data belonging to it
     types <- liftM concat $ mapM toCode zipped

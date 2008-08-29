@@ -3,6 +3,12 @@
     FunctionalDependencies, FlexibleInstances, FlexibleContexts,
     MultiParamTypeClasses, UndecidableInstances #-}
 
+{- see cabal file
+#ifndef TypeToNatTypeEq
+  {-# Language OverlappingInstances  #-}
+#endif
+-}
+
 module Text.XML.Validated.Types (
   -- Validated -- contains the validated xml result
   -- , fromValidated  -- use this to get the result
@@ -35,7 +41,11 @@ module Text.XML.Validated.Types (
   , ElType
   , InitialState(..)
   , AttributeType
-  , PT, NYV, Elem, TypeToNat
+  , PT, NYV, Elem
+#ifdef TypeToNatTypeEq
+  , TypeToNat
+#endif
+
   , XmlIdsFromRoot(..)
   -- for debugging
   , debugEl
@@ -413,9 +423,14 @@ class Consume st el r | st el -> r -- result is on of C,CS,R,F
 
 -- element 
 instance Consume ANY (Elem e) (CS ANY)
-instance ( TypeToNat el n
+instance ( 
+#ifdef TypeToNatTypeEq
+           TypeToNat el n
          , TypeToNat el' n'
          , HEq n n' r'
+#else
+          TypeEq el el' r'
+#endif
          , HCond r' C (F (ExpectedButGot el el')) r
          ) => Consume (Elem el) (Elem el') r
 -- PCDATA 
@@ -530,7 +545,31 @@ debugEl :: (Fail x) => (PT x String) -> b
 debugEl = undefined
 
 --  ========= type level equality helper =============================
+#ifdef TypeToNatTypeEq
 class TypeToNat typE nr | typE -> nr
+#endif
 
-instance ( TypeToNat a n , TypeToNat b n' , HEq n n' r
+
+instance ( 
+#ifdef TypeToNatTypeEq
+          TypeToNat a n 
+        , TypeToNat b n'
+        , HEq n n' r
+#else
+        TypeEq a b r
+#endif
          ) => HEq (A a) (A b) r
+
+#ifndef TypeToNatTypeEq
+-- ========== TypeEq implementation, thanks Oleg ===================== 
+class TypeCast   a b   | a -> b, b->a   where typeCast   :: a -> b
+class TypeCast'  t a b | t a -> b, t b -> a where typeCast'  :: t->a->b
+class TypeCast'' t a b | t a -> b, t b -> a where typeCast'' :: t->a->b
+instance TypeCast'  () a b => TypeCast a b where typeCast x = typeCast' () x
+instance TypeCast'' t a b => TypeCast' t a b where typeCast' = typeCast''
+instance TypeCast'' () a a where typeCast'' _ x  = x
+
+instance (HBool b, TypeCast HFalse b
+          ) => TypeEq x y b
+instance TypeEq x x HTrue
+#endif

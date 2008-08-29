@@ -3,46 +3,68 @@ category:        XML
 synopsis:        library to write xml documents enforcing dtd validity by the haskell type system
                  idea based on WASH - unstable library, things will and must change
 version:         0.0
+Cabal-Version: >=1.2
 build-type:      Simple
-build-depends:   haskell98
-                 ,base
-                , HList
-                , HaXml >= 1.19
-                , filepath
-                , mtl
-                , containers
-                , template-haskell
-                , directory
-exposed-modules: Text.XML.Validated.Types
-                 Text.XML.Validated.Instance.String
-hs-source-dirs:  src
 
-executable:     test
-main-is:        test.hs
-hs-source-dirs: test, src
-build-depends:   haskell98
-                , base
-                , HList
-                , HaXml >= 1.19
-                , filepath
-                , mtl
-                , pretty
-                , containers
-                , template-haskell
+Flag TypeToNatTypeEq
+  Description: Use TypeToNat implementation to compare types (no need for -XOverlappingInstances)
+  Default: False
+
+Library
+  build-depends:   haskell98
+                   ,base
+                  , HList
+                  , HaXml >= 1.19
+                  , filepath
+                  , mtl
+                  , containers
+                  , template-haskell
+                  , directory
+  exposed-modules: Text.XML.Validated.Types
+                   Text.XML.Validated.Instance.String
+  hs-source-dirs:  src
+  extensions: CPP
+  if flag(TypeToNatTypeEq)
+    cpp-options: -DTypeToNatTypeEq
+  else
+    -- don't ask me why enabling this feature using LANGUAGE pragma dosen't work
+    extensions: OverlappingInstances
+
+executable     test
+  main-is:        test.hs
+  hs-source-dirs: test, src
+  build-depends:   haskell98
+                  , base
+                  , HList
+                  , HaXml >= 1.19
+                  , filepath
+                  , mtl
+                  , pretty
+                  , containers
+                  , template-haskell
+  extensions: CPP
+  if flag(TypeToNatTypeEq)
+    cpp-options: -DTypeToNatTypeEq
+  else
+    -- don't ask me why enabling this feature using LANGUAGE pragma dosen't work
+    extensions: OverlappingInstances
 
 
-executable:     run-testcases
-main-is:        run-testcases.hs
-hs-source-dirs: test, src
-build-depends:   haskell98
-                , base
-                , HList
-                , HaXml >= 1.19
-                , filepath
-                , mtl
-                , pretty
-                , containers
-                , HUnit
-                , template-haskell
-                , directory
-                , process
+executable     run-testcases
+  main-is:        run-testcases.hs
+  hs-source-dirs: test, src
+  build-depends:   haskell98
+                  , base
+                  , HList
+                  , HaXml >= 1.19
+                  , filepath
+                  , mtl
+                  , pretty
+                  , containers
+                  , HUnit
+                  , template-haskell
+                  , directory
+                  , process
+  extensions: CPP
+  if flag(TypeToNatTypeEq)
+    cpp-options: -DTypeToNatTypeEq

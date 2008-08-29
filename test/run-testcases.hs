@@ -116,7 +116,7 @@ testCases hs exeF xmlF dtdF (TestFile f dtd valid invalid) =
         -- use it to parse the xml code again?
         writeFile hs $ unlines [
             "-- packages: HaXml,template-haskell,containers,directory,mtl,HList,filepath"
-          , "{-# OPTIONS_GHC -fcontext-stack=50 #-}"
+          , "{-# OPTIONS_GHC -fcontext-stack=200 #-}"
           , "{-# LANGUAGE UndecidableInstances, FlexibleContexts,  MultiParamTypeClasses,"
           , "-- based on " ++ (cwd </> f)
           , "FlexibleInstances,  EmptyDataDecls,  TemplateHaskell #-}"
@@ -146,8 +146,16 @@ testCases hs exeF xmlF dtdF (TestFile f dtd valid invalid) =
         case mghc of
           Nothing -> error "fatal, no ghc found to run the tests!"
           Just ghc -> do 
+              let flags = [ "-i" ++ (cwd</>"src"), "-i" ++ (cwd</>"test"), "-cpp"
+#ifndef TypeToNatTypeEq
+                                         , "-XOverlappingInstances"
+#else
+                                         , "-DTypeToNatTypeEq"
+#endif
+                                         , "--make", "-o", exeF, hs ]
 
-              h <- runProcess' "ghc" ghc [ "-i" ++ (cwd</>"src"), "-i" ++ (cwd</>"test"), "--make", "-o", exeF, hs ] 
+              putStrLn $ "ghc " ++ (unwords flags)
+              h <- runProcess' "ghc" ghc flags
               ec <- waitForProcess h
               when (ecToBool ec /= valid) $ fail $ " valid = " ++ (show valid) ++ " expected, but ghc exited with " ++ (show ec)
               -- TODO parse the generated result file and compare against input 
