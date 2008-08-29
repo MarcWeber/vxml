@@ -1,4 +1,4 @@
-dtd;
+dtd:
 <!-- essentially the same as the original, but I have inlined the .ent files because HaXmL can't yet read
     the external files yet from a different working directory. I've mailed some patches to the author
 -->
@@ -1494,6 +1494,15 @@ several semantically related columns together.
   %cellhalign;
   %cellvalign;
   >
+invalid:
+<html>
+  <head>
+    <title>Hello World</title>
+  </head>
+  <body>
+    PCDATA only
+  </body>
+</html>
 valid:
 <html>
   <head>
