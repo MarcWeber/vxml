@@ -38,7 +38,8 @@ module Text.XML.Validated.Types (
   , PT, NYV, Elem, TypeToNat
   , XmlIdsFromRoot(..)
   -- for debugging
-  -- , debugEl
+  , debugEl
+  , Consume
   ) where 
 
 import Data.HList
@@ -60,7 +61,7 @@ fromPT (PT _ v) = v
 -}
 
 -- ========== classes to generate the result type ==================== 
--- mainly targeting kind of String output (see Instances/*)
+-- mainly targeting kind of String output (see Instances/ * )
 
 data XmlIds = XmlIds { 
   publicId :: Maybe String
@@ -182,16 +183,16 @@ class AddElT est est' el el2 stc elc
 instance (
     EndAttrs el el2
   , AddEl el2 elc
-  , Consume st celType r
-  , Retry r celType st'
+  , Consume st (Elem celType) r
+  , Retry r (Elem celType) st'
   ) => AddElT (NYV (Element elType stA st HFalse)) (NYV (Element elType stA st' HTrue)) el el2
               (Valid celType) elc where
  addElT (PT _ t) (PT _ c) = PT (undefined :: est') $ addEl (endAttrs t) c
 -- not first child
 instance (
     AddEl el elc
-  , Retry r celType st'
-  , Consume st celType r
+  , Retry r (Elem celType) st'
+  , Consume st (Elem celType) r
   ) => AddElT (NYV (Element elType stA st HTrue)) (NYV (Element elType stA st' HTrue)) el el
               (Valid celType) elc where
  addElT (PT _ t) (PT _ c)= PT (undefined :: est') $ addEl t c
@@ -199,7 +200,7 @@ instance (
 instance (
     AddEl el elc'
   , Retry r celType st'
-  , Consume st celType r
+  , Consume st (Elem celType) r
   , EndElT (NYV (Element celType cstA cst chchs)) (Valid celType) elc elc'
   , AddElT (NYV (Element elType  stA st hchs)) (NYV (Element elType stA st' HTrue)) el el
            (Valid celType) elc'
@@ -313,7 +314,7 @@ instance (
     HMember (A attrType) added rd
   , CheckDuplicateAttribute elType attrType rd
   ) => StAddAttr elType attrType (AS req  allowed added)
-                                 (AS req' allowed (HCons (A attrType) added'))
+                                 (AS req' allowed (HCons (A attrType) added))
 class HFromMaybe mb b r | mb b -> r
 instance  HFromMaybe HNothing b b
 instance  HFromMaybe (HJust a) b a
@@ -341,6 +342,7 @@ instance ElEndable elType EMPTY
 instance ElEndable elType (Star a)
 instance ElEndable elType (Query a)
 instance ElEndable elType ANY
+instance ElEndable elType PCDATA
 instance (ElEndable elType a, ElEndable elType b
           ) => ElEndable elType (Seq a b)
   -- fail nicer error messages 
@@ -352,15 +354,6 @@ instance  StEndAttrs elType (AS HNil allowed added)
   -- fail nicer error messages
 instance  ( RequiredAttributesMissing elType (HCons a b)
           ) => StEndAttrs elType (AS (HCons a b) allowed added)
-
--- ========== adding elements etc .. ================================= 
-
-class StAddEl st st2 celType | st celType -> st2
-instance  (
-    Consume st celType r
-  , Retry r celType st'
-  ) => StAddEl st celType st'
-
 
 -- retry errors and retries consuming element on result (R x) 
 class Retry st el st' | st el -> st'
@@ -406,16 +399,31 @@ data R a    -- retry with state a (happens after removing ()* if content didn't 
 data RSKIP  -- retry, but skip this content (no match on ()*) 
 data F a    -- consume failure, a is reason
 
+{- st is one of
+ Seq a b
+ Or a b
+ Star
+ StarB
+ Query
+ Elem
+ ANY
+ el is either (Elem e) or PCDATA
+ -}
 class Consume st el r | st el -> r -- result is on of C,CS,R,F 
 
 -- element 
-instance Consume ANY el (CS ANY)
+instance Consume ANY (Elem e) (CS ANY)
 instance ( TypeToNat el n
          , TypeToNat el' n'
          , HEq n n' r'
          , HCond r' C (F (ExpectedButGot el el')) r
-         ) => Consume (Elem el) el' r
+         ) => Consume (Elem el) (Elem el') r
+-- PCDATA 
 instance Consume PCDATA PCDATA C
+instance Consume ANY PCDATA (CS PCDATA)
+-- fail nicer error messages 
+instance Consume (Elem e) PCDATA (F (GotPCDATAButExpected (Elem e)))
+instance Consume PCDATA (Elem e) (F (ExpectedPCDATABUtGot (Elem e)))
 
 -- sequence consumption
 class SeqConsume isConsumed b r | isConsumed b -> r 
@@ -503,6 +511,8 @@ instance ( Consume a el r
 -- ========== errors ================================================= 
 data BothFailed a b
 data ExpectedButGot a b
+data GotPCDATAButExpected a
+data ExpectedPCDATABUtGot a
 
 -- never implement instances for these.. either the lib is buggy or your data
 -- does'nt validate against dtd 
@@ -515,7 +525,7 @@ class UnallowedAttribute elType attrType
 class DuplicateAttribute elType attrType
 -- class Fail (from HList) 
 
-debugEl :: (Fail x) => (PT x a) -> b
+debugEl :: (Fail x) => (PT x String) -> b
 debugEl = undefined
 
 --  ========= type level equality helper =============================

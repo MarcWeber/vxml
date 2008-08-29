@@ -1,6 +1,9 @@
 {-# LANGUAGE StandaloneDeriving,  MultiParamTypeClasses, TemplateHaskell #-}
 module Text.XML.Validated.TH (
   dtdToTypes
+  -- exported for XmlToQ.hs 
+  , attrHaskell
+  , elementHaskellName
 ) where
 import Debug.Trace
 import Data.HList
@@ -218,7 +221,7 @@ dtdToTypes file (XmlIds pub sys) = (flip evalStateT) (initialDataState) $ do
     types <- liftM concat $ mapM toCode zipped
 
     docClass <- ST.lift $
-      let toMaybeStr Nothing = varE 'Nothing
+      let toMaybeStr Nothing = conE 'Nothing
           toMaybeStr (Just s) = appE (conE 'Just) (litE . stringL $ s)
       in sequence [
         instanceD (cxt []) (appT (conT ''XmlIdsFromRoot) ( (conT . elementHaskellName . fst . head) zipped) )
