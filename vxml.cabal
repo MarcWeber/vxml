@@ -5,6 +5,7 @@ synopsis:        library to write xml documents enforcing dtd validity by the ha
 version:         0.0
 Cabal-Version: >=1.2
 build-type:      Simple
+LICENSE: GPL
 
 Flag TypeToNatTypeEq
   Description: Use TypeToNat implementation to compare types (no need for -XOverlappingInstances)
