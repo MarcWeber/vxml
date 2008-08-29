@@ -45,3 +45,4 @@ build-depends:   haskell98
                 , HUnit
                 , template-haskell
                 , directory
+                , process
