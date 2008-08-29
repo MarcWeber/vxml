@@ -1,0 +1,4 @@
+dtd:
+<!ELEMENT root EMPTY >
+valid:
+<root/>

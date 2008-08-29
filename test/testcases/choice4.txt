@@ -1,0 +1,19 @@
+dtd:
+<!ELEMENT root (a|b|c)?>
+<!ELEMENT a EMPTY>
+<!ELEMENT b EMPTY>
+<!ELEMENT c EMPTY>
+invalid:
+<root> <a/><b/><c/> </root>
+
+invalid:
+<root> <a/><c/><b/> </root>
+
+valid:
+<root/>
+
+valid:
+<root> <c/></root>
+
+valid:
+<root> <a/></root>

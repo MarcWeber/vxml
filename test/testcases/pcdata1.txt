@@ -1,0 +1,12 @@
+dtd:
+<!ELEMENT root (#PCDATA)>
+<!ELEMENT tag EMPTY>
+valid:
+<root>
+  Some text
+</root>
+invalid:
+<root>
+  <tag/>
+</root>
+

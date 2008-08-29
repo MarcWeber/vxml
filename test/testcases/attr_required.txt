@@ -1,0 +1,20 @@
+dtd:
+<!ELEMENT root (tag) >
+<!ELEMENT tag EMPTY >
+<!ATTLIST tag
+  id          CDATA             #REQUIRED
+  >
+
+valid:
+<root>
+  <tag id="7"/>
+</root>
+
+invalid:
+<root>
+  <tag/>
+</root>
+
+invalid:
+<root a="7">
+</root>

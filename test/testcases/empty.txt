@@ -1,0 +1,14 @@
+dtd:
+<!ELEMENT root EMPTY>
+<!ELEMENT tag EMPTY >
+
+valid:
+<root/>
+
+invalid:
+<root a="7"/>
+
+invalid:
+<root a="7">
+  <tag/>
+</root>

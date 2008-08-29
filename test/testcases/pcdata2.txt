@@ -1,0 +1,35 @@
+dtd:
+<!ELEMENT root (#PCDATA|tag)*>
+<!ELEMENT tag EMPTY>
+valid:
+<root>
+  Some text
+</root>
+
+valid:
+<root>
+  some text
+  <tag/>
+</root>
+
+valid:
+<root>
+  <tag/>
+  some text
+</root>
+
+valid:
+<root>
+  some text
+  <tag/>
+  some text
+</root>
+
+valid:
+<root>
+  <tag/>
+  some text
+  <tag/>
+  some text
+</root>
+
