@@ -456,7 +456,6 @@ data Star content  -- ^ Zero Or More
 -- all content has been consumed to start a new cycle
 data StarB state content
 
-data Validated -- state will be set to Validated after endElT 
 data NYV state -- not yet valid state 
 data Valid elType -- "state" of validated element
 data C      -- consumed, no element left
