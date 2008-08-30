@@ -35,13 +35,15 @@ module Text.XML.Validated.Types (
   , XmlIds(..)
 
 
-#ifdef DoValidate
   -- exported for utils and TH, you should not have to use them
-  , Seq, Or, ANY, Element, C, Query, Star, EMPTY, PCDATA, A, AS
+  , Element, AS, AttrOk
+#ifdef DoValidate
+  , Seq, Or, ANY, C, Query, Star, PCDATA, A
+#else
+  , NoValidation
 #endif
+  , EMPTY
 
-  , AttributeType
-  , ElType
   , InitialState(..)
   , PT, NYV, Elem
 #ifdef TypeToNatTypeEq
@@ -69,16 +71,13 @@ import Data.Either
         Element 
           elType          -- the eltype (Html_T or Body_T ..)
           stateAttributes  -- see Consume for a list of valid content 
-          stateChilds     -- (AS required allowed added)  all three beeing a HList of (A attrtype)
+          stateChilds     -- (AS required added) all three beeing a HList of (A attrtype)
           hasChildren     -- HTrue or HFalse 
        )
 
    or
 
    Valid ( elType )
-
-   if no validation takes place stateChilds and hasChildren is set to NoValidation
-
 
   The life cycle of the state is typically:
   -----------------------------------------
@@ -141,8 +140,7 @@ data XmlIds = XmlIds {
 class CreateEl elType el where
   createEl :: elType -> el
 
-class (AttributeType attrType
-  ) => AddAttribute el attrType where 
+class AddAttribute el attrType where 
   addAttribute :: el -> attrType -> String -> el -- String = attr value FIXME: extend to all attr types - still proof of concept
 
 -- after this no attributes can be allowed 
@@ -197,19 +195,10 @@ instance ( EndElT (NYV (Element elType stA st hchs)) st' el el2
 
 data PT a b = PT a b -- phantom type containing state a and the result b 
 
- -- you should never have to create an instance for AttributeType or ElType
- -- this is done automatically from DTD in TH.hs
-class AttributeType attrType
-class ElType elType
-
 class InitialState elType initialState | elType -> initialState
   where
   initialState :: elType -> initialState
   initialState = undefined
-#ifndef DoValidate
-instance InitialState elType 
-                      (NYV ( Element elType (AS HNil NoValidation HNil) NoValidation HFalse ))
-#endif
 
 class ( InitialState elType initialState -- default instance, no need to write your own 
       , CreateEl elType el
@@ -220,25 +209,33 @@ class ( InitialState elType initialState -- default instance, no need to write y
                      (createEl (undefined :: elType))
 
 instance (
-      ElType elType
-    , CreateEl elType el
+      CreateEl elType el
     , InitialState elType initialState
     ) => CreateElT elType initialState el
 
+class AttrOk elType attr
 class AddAttrT attrType st st2 el 
-      | st -> st2 where 
+      | st attrType -> st2 where 
   addAttrT :: PT st el -> attrType -> String -> PT st2 el
   -- String = attr value FIXME: extend to all attr types - still proof of concept
 
-instance ( AttributeType attrType
-      , AddAttribute el attrType
+instance (
+        AddAttribute el attrType
+      , AttrOk elType attrType
 #ifdef DoValidate
-      , StAddAttr elType attrType stA stA'
+      , -- remove attribute from required list
+        HMemberM (A attrType) req mreq
+      , HFromMaybe mreq req req'
+      , -- no attribute may be added twice 
+        HMember (A attrType) added rd
+      , CheckDuplicateAttribute elType attrType rd
 #else
-      , IdClass stA stA'
+      , IdClass req req'
 #endif
-      ) => AddAttrT attrType (NYV (Element elType stA  st HFalse)) 
-                             (NYV (Element elType stA' st HFalse)) el
+      ) => AddAttrT attrType (NYV (Element elType (AS req  added) st HFalse)) 
+                             (NYV (Element elType (AS HNil (HCons (A attrType) added)) st HFalse)) el
+
+
   where
   addAttrT (PT _ t) _ v = PT (undefined :: st2)
                           (addAttribute t (undefined :: attrType) v)
@@ -249,8 +246,15 @@ instance ( YouCantAddAttributesAfterAddingContentTo elType
 
 
 #ifdef DoValidate
-class (AttributeType attrType
-      ) => StAddAttr elType attrType stA stA2 | attrType stA -> stA2
+                                 
+class HFromMaybe mb b r | mb b -> r
+instance  HFromMaybe HNothing b b
+instance  HFromMaybe (HJust a) b a
+class CheckDuplicateAttribute elType attrType hbool
+instance CheckDuplicateAttribute elType attrType HFalse
+instance ( DuplicateAttribute elType attrType
+         ) => CheckDuplicateAttribute elType attrType HTrue
+
 #endif
 
 -- ========== type level implementation ============================== 
@@ -411,44 +415,15 @@ instance ( EndAttrsEndElement elType el el2
          ) => EndElT (NYV (Element elType stA (Or a b) HFalse))
                      (Valid elType) el el2
   where endElT _ = undefined -- shut up warning
-
+#endif
 
 -- ========== the uglier part, the validation by transforming states
-
--- ========== attributes stuff =======================================
--- add attribute to allowed list, fail if it has already been allowed
--- remove attr from recquired list, add it to attrs list 
-instance (
-    AttributeType attrType
-  , -- remove attribute from required list
-    HMemberM (A attrType) req mreq
-  , HFromMaybe mreq req req'
-  , -- only allowed attributes 
-    HMember (A attrType) allowed ra
-  , CheckAllowedAttribute elType attrType ra
-  , -- no attribute may be added twice 
-    HMember (A attrType) added rd
-  , CheckDuplicateAttribute elType attrType rd
-  ) => StAddAttr elType attrType (AS req  allowed added)
-                                 (AS req' allowed (HCons (A attrType) added))
-class HFromMaybe mb b r | mb b -> r
-instance  HFromMaybe HNothing b b
-instance  HFromMaybe (HJust a) b a
-class CheckAllowedAttribute elType attrType hbool
-instance CheckAllowedAttribute elType attrType HTrue
-instance ( UnallowedAttribute elType attrType
-         ) => CheckAllowedAttribute elType attrType HFalse
-class CheckDuplicateAttribute elType attrType hbool
-instance CheckDuplicateAttribute elType attrType HFalse
-instance ( DuplicateAttribute elType attrType
-         ) => CheckDuplicateAttribute elType attrType HTrue
-#endif
 
 -- ========== elements and subelements / consume classes =============
 
 -- element content accept stuff
 data Element elType stAttributes elementsState hasChilds 
-data AS req allowed added -- attribute state 
+data AS req added -- attribute state 
 -- elType: the element type_T 
 -- hasChilds: HTrue or HFalse, is necessary to to know wether empty tags <br/> can be used
 
@@ -468,10 +443,10 @@ instance ( MoreElementsExpected elType (Elem a)) =>  ElEndable elType (Elem a)
 instance ( MoreElementsExpected elType (Or a b))  => ElEndable elType (Or a b)
 
 class StEndAttrs elType elst
-instance  StEndAttrs elType (AS HNil allowed added)
+instance  StEndAttrs elType (AS HNil added)
   -- fail nicer error messages
 instance  ( RequiredAttributesMissing elType (HCons a b)
-          ) => StEndAttrs elType (AS (HCons a b) allowed added)
+          ) => StEndAttrs elType (AS (HCons a b) added)
 
 -- retry errors and retries consuming element on result (R x) 
 class Retry elType st el st' | st el -> st'

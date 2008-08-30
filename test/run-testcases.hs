@@ -116,10 +116,11 @@ testCases hs exeF xmlF dtdF (TestFile f dtd valid invalid) =
         -- use it to parse the xml code again?
         writeFile hs $ unlines [
             "-- packages: HaXml,template-haskell,containers,directory,mtl,HList,filepath"
+          , "-- ghc-options: -XOverlappingInstances, -cpp"
           , "{-# OPTIONS_GHC -fcontext-stack=200 #-}"
           , "{-# LANGUAGE UndecidableInstances, FlexibleContexts,  MultiParamTypeClasses,"
-          , "-- based on " ++ (cwd </> f)
           , "FlexibleInstances,  EmptyDataDecls,  TemplateHaskell #-}"
+          , "-- based on " ++ (cwd </> f)
           , "module Main where"
           , "import Language.Haskell.TH"
           , "import Control.Monad"

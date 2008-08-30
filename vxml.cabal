@@ -10,6 +10,9 @@ LICENSE: GPL
 Flag TypeToNatTypeEq
   Description: Use TypeToNat implementation to compare types (no need for -XOverlappingInstances)
   Default: False
+Flag DoValidate
+  Description: When set to True no type checking will take place (compilation will be much faster)
+  Default: True
 
 Library
   build-depends:   haskell98
@@ -25,6 +28,8 @@ Library
                    Text.XML.Validated.Instance.String
   hs-source-dirs:  src
   extensions: CPP
+  if flag(DoValidate)
+    cpp-options: -DDoValidate
   if flag(TypeToNatTypeEq)
     cpp-options: -DTypeToNatTypeEq
   else
@@ -44,6 +49,8 @@ executable     test
                   , containers
                   , template-haskell
   extensions: CPP
+  if flag(DoValidate)
+    cpp-options: -DDoValidate
   if flag(TypeToNatTypeEq)
     cpp-options: -DTypeToNatTypeEq
   else

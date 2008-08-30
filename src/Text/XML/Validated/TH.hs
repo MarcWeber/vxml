@@ -61,11 +61,6 @@ zipElements list =
 instanceShow dataName value = do
   instanceD (cxt []) (appTn (conT ''Show) [conT dataName])
     [funD 'show [ clause [wildP] (normalB (litE . stringL $ value)) []] ]
-  -- instance typeA typeB
-instanceOfSimple :: TypeQ -> TypeQ -> DecQ
-instanceOfSimple a b =
-  instanceD (cxt []) (appTn a [b]) []
-
 
 
 #ifdef TypeToNatTypeEq
@@ -111,7 +106,11 @@ addMod Star x = appT (conT ''Star) x
 addMod Plus x =  seqList [x, appT (conT ''Star) x ]
 -- (x)+ is rewritten seq [x, x*]
 -- only for debugging:
+#else 
+elementState H.EMPTY = conT ''T.EMPTY -- at least force that empty elements are still empty 
+elementState _ = conT ''NoValidation
 #endif
+
 deriving instance Show Mixed
 deriving instance Show ContentSpec
 deriving instance Show TokenizedType
@@ -139,60 +138,66 @@ toCode (n, (Just (ElementDecl _ content), Just (AttListDecl _ attdefList) ) ) = 
   mbPred <- gets mPred
   modify (\s -> s { mPred = Just (elementHaskell n) } )
 
-  ST.lift $ sequence [
+  ST.lift $ sequence  ([
 
-    -- | dataElement
-    dataD (cxt []) elDataName [] [] []
+   -- | dataElement
+   dataD (cxt []) elDataName [] [] []
 
-     , -- instanceElementType
-     instanceOfSimple (conT ''ElType) (conT elDataName)
-
-     , -- function elname for convinience
-     let [elType, initialState, el] = map mkName [ "elType", "initialState", "el"]
-     in sigD (mkName $ fstLower n) $ -- why do I need this type signature ?
-       forallT [elType, initialState, el]
-         (cxt [ appTn (conT ''T.InitialState) [ conT elDataName, varT initialState ]
-              , appTn (conT ''CreateEl) [ conT elDataName, varT el ]
-              ]) (appTn (conT ''PT) [varT initialState, varT el])
-     , funD (mkName $ fstLower n)
+   , -- function elname for convinience
+   let [elType, initialState, el] = map mkName [ "elType", "initialState", "el"]
+   in sigD (mkName $ fstLower n) $ -- why do I need this type signature ?
+     forallT [elType, initialState, el]
+       (cxt [ appTn (conT ''T.InitialState) [ conT elDataName, varT initialState ]
+            , appTn (conT ''CreateEl) [ conT elDataName, varT el ]
+            ]) (appTn (conT ''PT) [varT initialState, varT el])
+   , funD (mkName $ fstLower n)
      [ clause [] (normalB (appEn (varE 'createElT) [undType (conT elDataName)] ) ) []]
 
-     , -- instanceElementShow
-     instanceShow elDataName n
+   , -- instanceElementShow
+   instanceShow elDataName n
 
-#ifdef DoValidate
+
+
      , -- instanceElementInitialState
 
-     let attr a = appT (conT ''A) a
+     let 
+#ifdef DoValidate
+         attr a = appT (conT ''A) a
 
          reqAttributes =    hlist [ attr $ conT $ attrHaskellName name
                                  | (AttDef name attType REQUIRED) <- attdefList ]
-         allowedAttributes = hlist [ attr $ conT $ attrHaskellName name
-                                 | (AttDef name attType _) <- attdefList ]
-         state = mytrace (show attdefList) $ appT (conT ''T.NYV) $
-                                                appTn (conT ''T.Element)
-                                                      [conT elDataName
-                                                      , appTn (conT ''AS)
-                                                         [reqAttributes, allowedAttributes
-                                                         , hlist [] {- added -}]
-                                                      , elementState content
-                                                      , conT ''HFalse
-                                                      ]
+#endif
+         state = mytrace (show attdefList) $ 
+                  appT (conT ''T.NYV) $
+                    appTn (conT ''T.Element)
+                          [conT elDataName
+                          , appTn (conT ''AS)
+                             [
+#ifdef DoValidate
+                              reqAttributes
+#else
+                              hlist []
+#endif
+                             , 
+                             hlist [] {- added -}
+                             ]
+                          , elementState content
+                          , conT ''HFalse
+                          ]
     in instanceD (cxt [])  -- (CreateEl <type> el)
                 (appTn (conT ''T.InitialState) [conT elDataName, state])  []
            -- [funD 'T.initialState [ clause [wildP] (normalB ( varE 'undefined )) []] ]
-#endif
 
 #ifdef TypeToNatTypeEq
     , -- type to nat
     instanceOfTypeToNat mbPred elDataName
 #endif
-    ]
-
-class InitialState elType state where
-  initialState :: elType -> state
-
-
+    ] 
+    ++ ( -- AttrOk instances 
+          [ instanceD (cxt ([])) (appTn (conT ''AttrOk) [ conT elDataName, conT $ attrHaskellName name ] ) []
+          | (AttDef name attType _) <- attdefList ]
+       )
+    )
 
 dtdToTypes :: FilePath -> XmlIds -> Q [Dec]
 dtdToTypes file (XmlIds pub sys) = (flip evalStateT) (initialDataState) $ do
@@ -212,7 +217,6 @@ dtdToTypes file (XmlIds pub sys) = (flip evalStateT) (initialDataState) $ do
                      ST.lift $ do
                        d <- dataD (cxt []) nameN [] [] []
                        s <- instanceShow nameN n
-                       i <- instanceOfSimple (conT ''AttributeType) (conT nameN)
                        add <- let [el,val] = map mkName ["el", "val"]
                               in  funD (mkName $ fstLower name)
                                     [ clause [ varP el, varP val ]
@@ -224,7 +228,7 @@ dtdToTypes file (XmlIds pub sys) = (flip evalStateT) (initialDataState) $ do
 #ifdef TypeToNatTypeEq
                        n <- instanceOfTypeToNat mbPred nameN
 #endif
-                       return [d,s,i
+                       return [d,s
 #ifdef TypeToNatTypeEq
                               ,n
 #endif

@@ -11,7 +11,6 @@ instance (Show elType) => CreateEl elType String where
   createEl _ = "<" ++ (show (undefined :: elType))
 
 instance (Show attrType
-         , AttributeType attrType
          ) => AddAttribute String attrType where 
   addAttribute tag _ value = 
       tag ++ " " ++ (show (undefined :: attrType) ) 

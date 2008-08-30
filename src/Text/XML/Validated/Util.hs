@@ -24,10 +24,10 @@ appn app f = appn' f . reverse
 undType :: TypeQ -> ExpQ
 undType t = sigE (varE 'undefined) t
 
-#ifdef DoValidate
 -- contstruct HList 
 hlist [] = conT ''HNil
 hlist (x:xs) = appTn (conT ''HCons) [x, hlist xs]
+#ifdef DoValidate
 -- contstruct Seq list
 list r m [x] = error $ m ++ " list with only on element! " ++ ( pprint $ unsafePerformIO $ runQ x)
 list t m [x,y] = appTn t [x, y]
