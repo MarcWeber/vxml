@@ -35,8 +35,10 @@ module Text.XML.Validated.Types (
   , XmlIds(..)
 
 
+#ifdef DoValidate
   -- exported for utils and TH, you should not have to use them
   , Seq, Or, ANY, Element, C, Query, Star, EMPTY, PCDATA, A, AS
+#endif
 
   , AttributeType
   , ElType
@@ -49,7 +51,9 @@ module Text.XML.Validated.Types (
   , XmlIdsFromRoot(..)
   -- for debugging
   , debugEl
+#ifdef DoValidate
   , Consume
+#endif
   ) where 
 
 import Data.HList
@@ -202,6 +206,10 @@ class InitialState elType initialState | elType -> initialState
   where
   initialState :: elType -> initialState
   initialState = undefined
+#ifndef DoValidate
+instance InitialState elType 
+                      (NYV ( Element elType (AS HNil NoValidation HNil) NoValidation HFalse ))
+#endif
 
 class ( InitialState elType initialState -- default instance, no need to write your own 
       , CreateEl elType el
@@ -224,7 +232,11 @@ class AddAttrT attrType st st2 el
 
 instance ( AttributeType attrType
       , AddAttribute el attrType
+#ifdef DoValidate
       , StAddAttr elType attrType stA stA'
+#else
+      , IdClass stA stA'
+#endif
       ) => AddAttrT attrType (NYV (Element elType stA  st HFalse)) 
                              (NYV (Element elType stA' st HFalse)) el
   where
@@ -236,8 +248,10 @@ instance ( YouCantAddAttributesAfterAddingContentTo elType
   where addAttrT = undefined -- shut up warning 
 
 
+#ifdef DoValidate
 class (AttributeType attrType
       ) => StAddAttr elType attrType stA stA2 | attrType stA -> stA2
+#endif
 
 -- ========== type level implementation ============================== 
 
@@ -249,24 +263,36 @@ class AddElT est est' el el2 stc elc
 instance (
     EndAttrs el el2
   , AddEl el2 elc
+#ifdef DoValidate
   , Consume st (Elem celType) r
   , Retry elType r (Elem celType) st'
+#else 
+  , IdClass st st'
+#endif
   ) => AddElT (NYV (Element elType stA st HFalse)) (NYV (Element elType stA st' HTrue)) el el2
               (Valid celType) elc where
  addElT (PT _ t) (PT _ c) = PT (undefined :: est') $ addEl (endAttrs t) c
 -- not first child
 instance (
     AddEl el elc
+#ifdef DoValidate
   , Retry elType r (Elem celType) st'
   , Consume st (Elem celType) r
+#else
+  , IdClass st st'
+#endif
   ) => AddElT (NYV (Element elType stA st HTrue)) (NYV (Element elType stA st' HTrue)) el el
               (Valid celType) elc where
  addElT (PT _ t) (PT _ c)= PT (undefined :: est') $ addEl t c
 -- validate child 
 instance (
     AddEl el elc'
+#ifdef DoValidate
   , Retry elType r (Elem celType) st'
   , Consume st (Elem celType) r
+#else
+  , IdClass st st'
+#endif
   , EndElT (NYV (Element celType cstA cst chchs)) (Valid celType) elc elc'
   , AddElT (NYV (Element elType  stA st hchs)) (NYV (Element elType stA st' HTrue)) el el
            (Valid celType) elc'
@@ -280,10 +306,16 @@ class AddTextT el el2 text elst elst2 | el -> el2, el2 -> el, elst -> elst2 wher
 -- first child 
 instance (
     EndAttrs el el2
+#ifdef DoValidate
   , StEndAttrs elType stA
+#endif
   , AddText el2 text
+#ifdef DoValidate
   , Consume st PCDATA r
   , Retry elType r PCDATA st'
+#else
+  , IdClass st st'
+#endif
   ) => AddTextT el el2 text (NYV (Element elType stA st  HFalse))
                             (NYV (Element elType stA st' HTrue))
   where
@@ -291,8 +323,12 @@ instance (
 -- not first child
 instance ( 
     AddText el text
+#ifdef DoValidate
   , Consume st PCDATA r
   , Retry elType r PCDATA st'
+#else
+  , IdClass st st'
+#endif
   ) => AddTextT el el text (NYV (Element elType stA st  HTrue))
                            (NYV (Element elType stA st' HTrue))
   where
@@ -304,18 +340,23 @@ class EndElT st st' el el2| st -> st', el -> el2, el2 -> el where
            -> (PT st' el2)
 -- end element with childs 
 instance ( EndEl elType el el2
+#ifdef DoValidate
          , ElEndable elType st
+#endif
          ) => EndElT (NYV (Element elType stA st HTrue))
                      (Valid elType) el el2
   where endElT (PT _ el) = PT undefined (endEl (undefined :: elType)  el)
 -- end elements without childs declared EMPTY 
 instance ( EndAttrsEndElement elType el el2
+#ifdef DoValidate
          , StEndAttrs elType stA
+#endif
          ) => EndElT (NYV (Element elType stA EMPTY HFalse))
                      (Valid elType) el el2
   where endElT (PT _ el) = PT undefined (endAttrsEndElementDeclaredEmpty (undefined :: elType) el)
 -- end elements without childs not declared EMPTY 
 -- the following instances only differ in st, when using overlapping instances one would suffice
+#ifdef DoValidate
 instance ( EndAttrsEndElement elType el el2
          , StEndAttrs elType stA
          -- , ElEndable elType st
@@ -340,6 +381,14 @@ instance ( EndAttrsEndElement elType el el2
          ) => EndElT (NYV (Element elType stA ANY HFalse))
                      (Valid elType) el el2
   where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
+#else
+instance ( EndAttrsEndElement elType el el2
+         ) => EndElT (NYV (Element elType stA NoValidation HFalse))
+                     (Valid elType) el el2
+  where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
+#endif
+
+#ifdef DoValidate
   -- fail nicer error messages 
 instance ( EndAttrsEndElement elType el el2
          , StEndAttrs elType stA
@@ -362,6 +411,7 @@ instance ( EndAttrsEndElement elType el el2
          ) => EndElT (NYV (Element elType stA (Or a b) HFalse))
                      (Valid elType) el el2
   where endElT _ = undefined -- shut up warning
+
 
 -- ========== the uglier part, the validation by transforming states
 
@@ -392,6 +442,7 @@ class CheckDuplicateAttribute elType attrType hbool
 instance CheckDuplicateAttribute elType attrType HFalse
 instance ( DuplicateAttribute elType attrType
          ) => CheckDuplicateAttribute elType attrType HTrue
+#endif
 
 -- ========== elements and subelements / consume classes =============
 
@@ -402,6 +453,7 @@ data AS req allowed added -- attribute state
 -- hasChilds: HTrue or HFalse, is necessary to to know wether empty tags <br/> can be used
 
 -- ========== allowed to end element ? =============================== 
+#ifdef DoValidate
 class ElEndable elType a
 instance ElEndable elType C
 instance ElEndable elType EMPTY
@@ -433,7 +485,7 @@ instance ( -- retry
 instance ( NoMoreElementsExpectedOrWrongElement elType el
          ) => Retry elType RSKIP el Failure
 instance ( Fail x ) => Retry elType (F x) el Failure
-
+#endif
 
 -- content
 -- data elType
@@ -458,6 +510,7 @@ data StarB state content
 
 data NYV state -- not yet valid state 
 data Valid elType -- "state" of validated element
+#ifdef DoValidate
 data C      -- consumed, no element left
 data CS a   -- consume success, new state is a
 data R a    -- retry with state a (happens after removing ()* if content didn't match)
@@ -577,6 +630,7 @@ instance SBConsume b (F a)   (F a)
 instance ( Consume a el r
          , SBConsume b r res
          ) => Consume (StarB a b) el res
+#endif
 
 -- ========== errors ================================================= 
 data Failure
@@ -627,4 +681,10 @@ instance TypeCast'' () a a where typeCast'' _ x  = x
 instance (HBool b, TypeCast HFalse b
           ) => TypeEq x y b
 instance TypeEq x x HTrue
+#endif
+
+#ifndef DoValidate
+class IdClass a b | a -> b
+instance IdClass  a a
+data NoValidation
 #endif

@@ -24,6 +24,7 @@ appn app f = appn' f . reverse
 undType :: TypeQ -> ExpQ
 undType t = sigE (varE 'undefined) t
 
+#ifdef DoValidate
 -- contstruct HList 
 hlist [] = conT ''HNil
 hlist (x:xs) = appTn (conT ''HCons) [x, hlist xs]
@@ -34,3 +35,4 @@ list t m (x:xs) = appTn t [x, list t m xs]
 seqList, choiceList :: [ TypeQ ] -> TypeQ
 seqList = list (conT ''Seq) "sequence"
 choiceList = list (conT ''Or) "choice"
+#endif

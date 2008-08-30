@@ -86,17 +86,18 @@ attrHaskellName = mkName . attrHaskell
 elementHaskell = (++ "_T") . fstUpper
 elementHaskellName = mkName .  elementHaskell
 
+#ifdef DoValidate
 -- initial state ready for starting type based parser
 conEl = (conT . elementHaskellName) -- private
-elementState :: String -> ContentSpec -> TypeQ
-elementState el H.EMPTY = conT ''T.EMPTY
-elementState el ANY = conT ''T.ANY
-elementState el (Mixed PCDATA) = addMod Star $ conT ''T.PCDATA
-elementState el (Mixed (PCDATAplus list)) = addMod Star $ choiceList $
+elementState :: ContentSpec -> TypeQ
+elementState H.EMPTY = conT ''T.EMPTY
+elementState ANY = conT ''T.ANY
+elementState (Mixed PCDATA) = addMod Star $ conT ''T.PCDATA
+elementState (Mixed (PCDATAplus list)) = addMod Star $ choiceList $
                                               (conT ''T.PCDATA)
                                               : [ appT (conT ''T.Elem) (conEl n)
                                                      | n <- list ]
-elementState el (ContentSpec spec) = sp spec
+elementState (ContentSpec spec) = sp spec
 
 sp (TagName n mod)     = addMod mod $ appT (conT ''T.Elem) (conEl n)
 sp (Choice [item] mod) = addMod mod $ sp item
@@ -110,6 +111,7 @@ addMod Star x = appT (conT ''Star) x
 addMod Plus x =  seqList [x, appT (conT ''Star) x ]
 -- (x)+ is rewritten seq [x, x*]
 -- only for debugging:
+#endif
 deriving instance Show Mixed
 deriving instance Show ContentSpec
 deriving instance Show TokenizedType
@@ -158,6 +160,7 @@ toCode (n, (Just (ElementDecl _ content), Just (AttListDecl _ attdefList) ) ) = 
      , -- instanceElementShow
      instanceShow elDataName n
 
+#ifdef DoValidate
      , -- instanceElementInitialState
 
      let attr a = appT (conT ''A) a
@@ -172,12 +175,13 @@ toCode (n, (Just (ElementDecl _ content), Just (AttListDecl _ attdefList) ) ) = 
                                                       , appTn (conT ''AS)
                                                          [reqAttributes, allowedAttributes
                                                          , hlist [] {- added -}]
-                                                      , elementState n content
+                                                      , elementState content
                                                       , conT ''HFalse
                                                       ]
     in instanceD (cxt [])  -- (CreateEl <type> el)
                 (appTn (conT ''T.InitialState) [conT elDataName, state])  []
            -- [funD 'T.initialState [ clause [wildP] (normalB ( varE 'undefined )) []] ]
+#endif
 
 #ifdef TypeToNatTypeEq
     , -- type to nat
