@@ -435,7 +435,7 @@ instance (
          ) => Consume (Elem el) (Elem el') r
 -- PCDATA 
 instance Consume PCDATA PCDATA C
-instance Consume ANY PCDATA (CS PCDATA)
+instance Consume ANY PCDATA (CS ANY)
 -- fail nicer error messages 
 instance Consume (Elem e) PCDATA (F (GotPCDATAButExpected (Elem e)))
 instance Consume PCDATA (Elem e) (F (ExpectedPCDATABUtGot (Elem e)))
