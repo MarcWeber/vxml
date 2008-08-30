@@ -30,12 +30,9 @@ $(
                       (Just "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd") ) 
  )
 
-(<<) = addElT
-(<<<) = addTextT
-
 main = do
 
-  putStrLn $ xmlDocT $
+  putStrLn $ xml $
     ((html << (head << (title <<< "hw")))
           <<  (body << (div <<< "test" )) )
   print "end"
