@@ -18,7 +18,7 @@ import Text.XML.Validated.Util
 xmlToQ :: FilePath -> ExpQ
 xmlToQ file =  do
     (Document prolog symTab element misc) <- runIO $ liftM (xmlParse file) $ readFile file
-    res <- app "putStrLn" $ app "xmlDocT" $ elemToQ element
+    res <- app "putStrLn" $ app "xml" $ elemToQ element
     runIO $ do
      hPutStrLn stdout "-- ============= generated code ================"
      hPutStrLn stdout $ pprint res
