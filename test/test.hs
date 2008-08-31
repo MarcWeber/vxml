@@ -21,13 +21,19 @@ import Text.XML.HaXml.Types
 import Text.XML.HaXml.Types
 import Text.XML.Validated.TH
 
-import TestXHTML
+import TestXHTML as X
 
 main = do
 
   putStrLn $ xml $
-    ((html << (head << (title <<< "hw")))
-          <<  ( body <<  ((script `type_A` "text/javascript") <<< "document.writeln('hi');" )) )
+    ((html << ( X.head << (title <<< "hw")
+                    << (link `rel_A` "stylesheet" `type_A` "text/css" `href_A` "style.css")
+              ))
+          <<  ( body << ((script `type_A` "text/javascript") <<< "document.writeln('hi');" )
+                     << (div `onclick_A` "alert('clicked');" `style_A` "color:#F79"
+                              <<< "text within the div"
+                        )
+              ) )
   print "end"
 
 
