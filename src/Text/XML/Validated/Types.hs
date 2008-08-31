@@ -38,7 +38,7 @@ module Text.XML.Validated.Types (
   -- exported for utils and TH, you should not have to use them
   , Element, AS, AttrOk
 #ifdef DoValidate
-  , Seq, Or, ANY, C, Query, Star, PCDATA, A
+  , Seq, Or, ANY, C, Query, Star, PCDATA, A, ElEndable, Retry
 #else
   , NoValidation
 #endif
@@ -358,31 +358,11 @@ instance ( EndAttrsEndElement elType el el2
          ) => EndElT (NYV (Element elType stA EMPTY HFalse))
                      (Valid elType) el el2
   where endElT (PT _ el) = PT undefined (endAttrsEndElementDeclaredEmpty (undefined :: elType) el)
--- end elements without childs not declared EMPTY 
--- the following instances only differ in st, when using overlapping instances one would suffice
 #ifdef DoValidate
 instance ( EndAttrsEndElement elType el el2
          , StEndAttrs elType stA
-         -- , ElEndable elType st
-         ) => EndElT (NYV (Element elType stA C HFalse))
-                     (Valid elType) el el2
-  where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
-instance ( EndAttrsEndElement elType el el2
-         , StEndAttrs elType stA
-         -- , ElEndable elType st
-         ) => EndElT (NYV (Element elType stA (Star a) HFalse))
-                     (Valid elType) el el2
-  where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
-instance ( EndAttrsEndElement elType el el2
-         , StEndAttrs elType stA
-         -- , ElEndable elType st
-         ) => EndElT (NYV (Element elType stA (Query a) HFalse))
-                     (Valid elType) el el2
-  where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
-instance ( EndAttrsEndElement elType el el2
-         , StEndAttrs elType stA
-         -- , ElEndable elType st
-         ) => EndElT (NYV (Element elType stA ANY HFalse))
+         , ElEndable elType st
+         ) => EndElT (NYV (Element elType stA st HFalse))
                      (Valid elType) el el2
   where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
 #else

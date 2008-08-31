@@ -21,20 +21,13 @@ import Text.XML.HaXml.Types
 import Text.XML.HaXml.Types
 import Text.XML.Validated.TH
 
--- import TestXHTML
-
-$( 
-      dtdToTypes "dtds/xhtml1-20020801/DTD/xhtml1-strict_onefile.dtd" 
-      -- dtdToTypes "dtds/test_simple.dtd" 
-              (XmlIds (Just "-//W3C//DTD XHTML 1.0 Strict//EN") 
-                      (Just "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd") ) 
- )
+import TestXHTML
 
 main = do
 
   putStrLn $ xml $
     ((html << (head << (title <<< "hw")))
-          <<  (body << (div <<< "test" )) )
+          <<  (((script `type_A` "text/javascript") <<< "test" )) )
   print "end"
 
 
