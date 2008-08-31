@@ -1,9 +1,0 @@
-<!ELEMENT root (a|b)+>
-<!ATTLIST root
-  id          ID             #REQUIRED
-  >
-<!ELEMENT a EMPTY>
-<!ELEMENT b EMPTY>
-<!ATTLIST b
-  id          ID             #REQUIRED
-  >

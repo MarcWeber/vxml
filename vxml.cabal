@@ -7,9 +7,6 @@ Cabal-Version: >=1.2
 build-type:      Simple
 LICENSE: GPL
 
-Flag TypeToNatTypeEq
-  Description: Use TypeToNat implementation to compare types (no need for -XOverlappingInstances)
-  Default: False
 Flag DoValidate
   Description: When set to True no type checking will take place (compilation will be much faster)
   Default: True
@@ -30,10 +27,6 @@ Library
   extensions: CPP
   if flag(DoValidate)
     cpp-options: -DDoValidate
-  if flag(TypeToNatTypeEq)
-    cpp-options: -DTypeToNatTypeEq
-  else
-    -- don't ask me why enabling this feature using LANGUAGE pragma dosen't work
     extensions: OverlappingInstances
 
 executable     test
@@ -51,10 +44,6 @@ executable     test
   extensions: CPP
   if flag(DoValidate)
     cpp-options: -DDoValidate
-  if flag(TypeToNatTypeEq)
-    cpp-options: -DTypeToNatTypeEq
-  else
-    -- don't ask me why enabling this feature using LANGUAGE pragma dosen't work
     extensions: OverlappingInstances
 
 
@@ -74,5 +63,5 @@ executable     run-testcases
                   , directory
                   , process
   extensions: CPP
-  if flag(TypeToNatTypeEq)
-    cpp-options: -DTypeToNatTypeEq
+  if flag(DoValidate)
+    cpp-options: -DDoValidate

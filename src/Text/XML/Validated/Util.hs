@@ -27,12 +27,3 @@ undType t = sigE (varE 'undefined) t
 -- contstruct HList 
 hlist [] = conT ''HNil
 hlist (x:xs) = appTn (conT ''HCons) [x, hlist xs]
-#ifdef DoValidate
--- contstruct Seq list
-list r m [x] = error $ m ++ " list with only on element! " ++ ( pprint $ unsafePerformIO $ runQ x)
-list t m [x,y] = appTn t [x, y]
-list t m (x:xs) = appTn t [x, list t m xs]
-seqList, choiceList :: [ TypeQ ] -> TypeQ
-seqList = list (conT ''Seq) "sequence"
-choiceList = list (conT ''Or) "choice"
-#endif

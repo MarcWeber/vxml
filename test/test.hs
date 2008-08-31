@@ -27,7 +27,7 @@ main = do
 
   putStrLn $ xml $
     ((html << (head << (title <<< "hw")))
-          <<  (((script `type_A` "text/javascript") <<< "test" )) )
+          <<  ( body <<  ((script `type_A` "text/javascript") <<< "document.writeln('hi');" )) )
   print "end"
 
 

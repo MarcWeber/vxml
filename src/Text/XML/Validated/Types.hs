@@ -38,7 +38,7 @@ module Text.XML.Validated.Types (
   -- exported for utils and TH, you should not have to use them
   , Element, AS, AttrOk
 #ifdef DoValidate
-  , Seq, Or, ANY, C, Query, Star, PCDATA, A, ElEndable, Retry
+  , ANY, C, PCDATA, A, ElEndable
 #else
   , NoValidation
 #endif
@@ -88,7 +88,7 @@ import Data.Either
   -- them from the required list
   NYV ( Element elType stA' st HFalse )
 
-  -- addElT: add one element, Consume and Retry will determine the new state,
+  -- addElT: add one element, Consume will determine the new state,
   -- fail if the child (elment or PCDATA) may not be added attribute validation
   -- takes here or if no child is added in endElT
   NYV ( Element elType stA' st' HTrue )
@@ -268,8 +268,7 @@ instance (
     EndAttrs el el2
   , AddEl el2 elc
 #ifdef DoValidate
-  , Consume st (Elem celType) r
-  , Retry elType r (Elem celType) st'
+  , Consume st (Elem celType) st'
 #else 
   , IdClass st st'
 #endif
@@ -280,8 +279,7 @@ instance (
 instance (
     AddEl el elc
 #ifdef DoValidate
-  , Retry elType r (Elem celType) st'
-  , Consume st (Elem celType) r
+  , Consume st (Elem celType) st'
 #else
   , IdClass st st'
 #endif
@@ -292,8 +290,7 @@ instance (
 instance (
     AddEl el elc'
 #ifdef DoValidate
-  , Retry elType r (Elem celType) st'
-  , Consume st (Elem celType) r
+  , Consume st (Elem celType) st'
 #else
   , IdClass st st'
 #endif
@@ -315,8 +312,7 @@ instance (
 #endif
   , AddText el2 text
 #ifdef DoValidate
-  , Consume st PCDATA r
-  , Retry elType r PCDATA st'
+  , Consume st PCDATA st'
 #else
   , IdClass st st'
 #endif
@@ -328,8 +324,7 @@ instance (
 instance ( 
     AddText el text
 #ifdef DoValidate
-  , Consume st PCDATA r
-  , Retry elType r PCDATA st'
+  , Consume st PCDATA st'
 #else
   , IdClass st st'
 #endif
@@ -358,6 +353,7 @@ instance ( EndAttrsEndElement elType el el2
          ) => EndElT (NYV (Element elType stA EMPTY HFalse))
                      (Valid elType) el el2
   where endElT (PT _ el) = PT undefined (endAttrsEndElementDeclaredEmpty (undefined :: elType) el)
+-- end elements without childs not declared EMPTY 
 #ifdef DoValidate
 instance ( EndAttrsEndElement elType el el2
          , StEndAttrs elType stA
@@ -370,31 +366,6 @@ instance ( EndAttrsEndElement elType el el2
          ) => EndElT (NYV (Element elType stA NoValidation HFalse))
                      (Valid elType) el el2
   where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
-#endif
-
-#ifdef DoValidate
-  -- fail nicer error messages 
-instance ( EndAttrsEndElement elType el el2
-         , StEndAttrs elType stA
-         -- , ElEndable elType st
-         , MoreElementsExpected elType (Elem a)
-         ) => EndElT (NYV (Element elType stA (Elem a) HFalse))
-                     (Valid elType) el el2
-  where endElT _ = undefined -- shut up warning
-instance ( EndAttrsEndElement elType el el2
-         , StEndAttrs elType stA
-         -- , ElEndable elType st
-         , MoreElementsExpected elType (Seq a b)
-         ) => EndElT (NYV (Element elType stA (Seq a b) HFalse))
-                     (Valid elType) el el2
-  where endElT _ = undefined -- shut up warning
-instance ( EndAttrsEndElement elType el el2
-         , StEndAttrs elType stA
-         -- , ElEndable elType st
-         , MoreElementsExpected elType (Or a b)
-         ) => EndElT (NYV (Element elType stA (Or a b) HFalse))
-                     (Valid elType) el el2
-  where endElT _ = undefined -- shut up warning
 #endif
 
 -- ========== the uglier part, the validation by transforming states
@@ -412,12 +383,8 @@ data AS req added -- attribute state
 class ElEndable elType a
 instance ElEndable elType C
 instance ElEndable elType EMPTY
-instance ElEndable elType (Star a)
-instance ElEndable elType (Query a)
 instance ElEndable elType ANY
 instance ElEndable elType PCDATA
-instance (ElEndable elType a, ElEndable elType b
-          ) => ElEndable elType (Seq a b)
   -- fail nicer error messages 
 instance ( MoreElementsExpected elType (Elem a)) =>  ElEndable elType (Elem a)
 instance ( MoreElementsExpected elType (Or a b))  => ElEndable elType (Or a b)
@@ -427,19 +394,6 @@ instance  StEndAttrs elType (AS HNil added)
   -- fail nicer error messages
 instance  ( RequiredAttributesMissing elType (HCons a b)
           ) => StEndAttrs elType (AS (HCons a b) added)
-
--- retry errors and retries consuming element on result (R x) 
-class Retry elType st el st' | st el -> st'
-instance Retry elType C el C -- alread done, nothing can be allowed
-instance Retry elType (CS st) el st -- alread done, continue with state st
-instance ( -- retry 
-  Consume st el r
-  , Retry elType r el st'
-  ) => Retry elType (R st) el  st'
-  -- fail nicer error messages 
-instance ( NoMoreElementsExpectedOrWrongElement elType el
-         ) => Retry elType RSKIP el Failure
-instance ( Fail x ) => Retry elType (F x) el Failure
 #endif
 
 -- content
@@ -448,184 +402,49 @@ instance ( Fail x ) => Retry elType (F x) el Failure
 data Or a tail
 -- the last two elementes are Sequence elem elem, thus a sequence with one element is not possible 
 -- a list with three elements looks like this: Seq a ( Seq b c)
-data Seq a tail
-
 data EMPTY         -- see comment on EndAttrsEndElement 
 data ANY           -- any element 
 data Elem elType   -- match an element 
-data A attr        -- but attributes in a box to make type level comparison easier 
+data A a
 data PCDATA        -- add text 
--- modifier
-data Query content -- ^ Zero Or One
-data Star content  -- ^ Zero Or More
--- after consuming one subtoken of Star StarB will contain the new state and
--- content will contain the original content, so that we can reset state after
--- all content has been consumed to start a new cycle
-data StarB state content
-
 data NYV state -- not yet valid state 
 data Valid elType -- "state" of validated element
 #ifdef DoValidate
 data C      -- consumed, no element left
-data CS a   -- consume success, new state is a
-data R a    -- retry with state a (happens after removing ()* if content didn't match)
-data RSKIP  -- retry, but skip this content (no match on ()*) 
-data F a    -- consume failure, a is reason
+data F a    --  
 
-{- st is one of
- Seq a b
- Or a b
- Star
- StarB
- Query
- Elem
- ANY
- el is either (Elem e) or PCDATA
- -}
 class Consume st el r | st el -> r -- result is on of C,CS,R,F 
 
--- element 
-instance Consume ANY (Elem e) (CS ANY)
-instance ( 
-#ifdef TypeToNatTypeEq
-           TypeToNat el n
-         , TypeToNat el' n'
-         , HEq n n' r'
-#else
-          TypeEq el el' r'
-#endif
-         , HCond r' C (F (ExpectedButGot el el')) r
-         ) => Consume (Elem el) (Elem el') r
 -- PCDATA 
 instance Consume PCDATA PCDATA C
-instance Consume ANY PCDATA (CS ANY)
+instance Consume ANY PCDATA C
+instance Consume ANY (Elem e) C
 -- fail nicer error messages 
-instance Consume (Elem e) PCDATA (F (GotPCDATAButExpected (Elem e)))
-instance Consume PCDATA (Elem e) (F (ExpectedPCDATABUtGot (Elem e)))
+instance (Fail (GotPCDATAButExpected (Elem e)) 
+        ) => Consume (Elem e) PCDATA ()
 
--- sequence consumption
-class SeqConsume isConsumed b r | isConsumed b -> r 
-instance SeqConsume C            b (CS b)        -- head consumed, return tail
-instance SeqConsume (CS a)       b (CS (Seq a b))-- head consumed element, but there are more to be consumed
-instance SeqConsume (F x)        b (F x)         -- head failed consuming element
-instance SeqConsume (RSKIP)      b (R b)         -- retry with head skipped
-instance SeqConsume (R a)        b (R (Seq a b)) -- retry with new head state eg add b to head (a*,b), new head will become just b
+instance (Fail (ExpectedPCDATABUtGot (Elem e)) 
+        ) => Consume PCDATA (Elem e) ()
 
-instance ( Consume a el r
-         , SeqConsume r b res
-         ) => Consume (Seq a b) el res
-
--- choice consumption
---  choice helper funtion
-{- all cases
- let l = [ "C", "(CS a)", "(R a)", "(RSKIP)", "(F a)"]
- mapM_ putStrLn [ "instance TakeConsumed " ++ a ++ " " ++ b | a <- l, b <- l]
- -}
-class TakeConsumed a b r | a b -> r -- helper function 
--- dtd must be deterministic, one C, CS is enough to skip the other
-instance TakeConsumed C a C
-instance TakeConsumed (CS a) C C
-instance TakeConsumed (R a) C C
-instance TakeConsumed (RSKIP) C C
-instance TakeConsumed (F a) C C
-instance TakeConsumed (CS a) (F b) (CS a)
-instance TakeConsumed (F b) (CS a) (CS a)
--- instance TakeConsumed (R b) (CS a) (CS a) -- cannot occcur (dtd determinism) 
--- instance TakeConsumed RSKIP (CS a) (CS a) -- cannot occour 
-
-
-instance TakeConsumed (RSKIP) (RSKIP) RSKIP
-
-instance TakeConsumed (F a) (RSKIP) RSKIP
-instance TakeConsumed (RSKIP) (F a) RSKIP
-
-instance TakeConsumed (R a) (RSKIP) (Query a)
-instance TakeConsumed (RSKIP) (R a) (Query a)
-
-instance TakeConsumed (R a) (R b) (R (Or a b))
-instance TakeConsumed (R a) (F b) (R a)
-instance TakeConsumed (F a) (R b) (R b)
-instance TakeConsumed (F a) (F b) (F (BothFailed a b))
-
-
-instance ( Consume a el r
-         , Consume b el r2
-         , TakeConsumed r r2 res
-         ) => Consume (Or a b) el res
--- modifier 
--- Query 
-class QueryConsume r res | r -> res -- helper function 
-instance QueryConsume C C
-instance QueryConsume (CS a) (CS a)
-instance QueryConsume (R a)  (Query (R a))
-instance QueryConsume (RSKIP) RSKIP
-instance QueryConsume (F a)   RSKIP
-instance ( Consume a el r
-         , QueryConsume r res
-         ) => Consume (Query a) el res
--- Star
-class StarConsume a r res | a r -> res -- helper function 
-instance StarConsume a C (CS (Star a)) -- next cycle 
-instance StarConsume a (CS b) (CS (StarB b a)) -- backup content 
-instance StarConsume a (R b)  (R (StarB b a))
-instance StarConsume a (RSKIP) RSKIP
-instance StarConsume a (F b)   RSKIP
-instance ( Consume a el r
-         , StarConsume a r res
-         ) => Consume (Star a) el res
-
--- StarB
-class SBConsume a r res | r -> res -- helper function 
-instance SBConsume b C      (CS (Star b)) -- next cycle 
-instance SBConsume b (CS a) (CS (StarB a b)) --  
-instance SBConsume b (R  c) (R (StarB c b))
-instance SBConsume b (RSKIP) RSKIP
-instance SBConsume b (F a)   (F a)
-
-instance ( Consume a el r
-         , SBConsume b r res
-         ) => Consume (StarB a b) el res
 #endif
 
 -- ========== errors ================================================= 
-data Failure
-data BothFailed a b
-data ExpectedButGot a b
 data GotPCDATAButExpected a
 data ExpectedPCDATABUtGot a
 
 -- never implement instances for these.. either the lib is buggy or your data
 -- does'nt validate against dtd 
 class MoreElementsExpected elType a
-class RequireAttrubtes a
-class NoMoreElementsExpectedOrWrongElement elType a
 class RequiredAttributesMissing elType req
 class YouCantAddAttributesAfterAddingContentTo elType
-class UnallowedAttribute elType attrType
 class DuplicateAttribute elType attrType
 -- class Fail (from HList) 
-
 debugEl :: (Fail x) => (PT x String) -> b
 debugEl = undefined
 
 --  ========= type level equality helper =============================
-#ifdef TypeToNatTypeEq
-class TypeToNat typE nr | typE -> nr
-#endif
+instance ( TypeEq a b r) => HEq (A a) (A b) r
 
-
-instance ( 
-#ifdef TypeToNatTypeEq
-          TypeToNat a n 
-        , TypeToNat b n'
-        , HEq n n' r
-#else
-        TypeEq a b r
-#endif
-         ) => HEq (A a) (A b) r
-
-#ifndef TypeToNatTypeEq
--- ========== TypeEq implementation, thanks Oleg ===================== 
 class TypeCast   a b   | a -> b, b->a   where typeCast   :: a -> b
 class TypeCast'  t a b | t a -> b, t b -> a where typeCast'  :: t->a->b
 class TypeCast'' t a b | t a -> b, t b -> a where typeCast'' :: t->a->b
@@ -636,8 +455,6 @@ instance TypeCast'' () a a where typeCast'' _ x  = x
 instance (HBool b, TypeCast HFalse b
           ) => TypeEq x y b
 instance TypeEq x x HTrue
-#endif
-
 #ifndef DoValidate
 class IdClass a b | a -> b
 instance IdClass  a a

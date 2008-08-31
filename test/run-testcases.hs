@@ -55,7 +55,12 @@ readTestFile f = do
     split f ("dtd:":lines) = 
         let (dtd, rest) = myBreak lines
             (valid, invalid) = splitRest rest
-        in TestFile f (unlines dtd) valid invalid
+        in TestFile f (unlines dtd) valid 
+#ifdef DoValidate
+                    invalid
+#else
+                    [] -- does QuickCheck support skipping invalid tests?
+#endif
     splitRest :: [ String ] -> ([String], [String])
     splitRest ("valid:":lines) = 
         let (valid, rest) = myBreak lines
