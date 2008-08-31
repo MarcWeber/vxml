@@ -15,8 +15,8 @@ import Text.XML.Validated.TH
 import Text.XML.Validated.Util
 
 
-xmlToQ :: FilePath -> ExpQ
-xmlToQ file =  do
+xmlToQ :: String -> FilePath -> ExpQ
+xmlToQ prefix file =  do
     (Document prolog symTab element misc) <- runIO $ liftM (xmlParse file) $ readFile file
     res <- app "putStrLn" $ app "xml" $ elemToQ element
     runIO $ do
@@ -30,8 +30,9 @@ xmlToQ file =  do
     app a b = appE (varE (mkName a)) b
     elemToQ (Elem en atts content) =
       -- attributes 
-      let elemWithAtts = foldl (\a (an, attV) -> appEn ( varE $ mkName $ fstLower $ attrHaskell an ) 
-                                                  [a, ( stringE $ show attV )] ) (varE $ mkName en)  atts
+      let p = (prefix ++)
+          elemWithAtts = foldl (\a (an, attV) -> appEn ( varE $ mkName $ p $ fstLower $ attrHaskell an ) 
+                                                  [a, ( stringE $ show attV )] ) (varE $ mkName $ p $ en)  atts
       -- content 
       in foldl (\el c -> addContent c el) elemWithAtts content
     -- addContent :: Content Posn -> ExpQ ->ExpQ 

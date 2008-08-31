@@ -37,6 +37,7 @@ import System.Directory
 import System.IO
 import System.FilePath
 import Test.HUnit
+import TestUtil (haskellFile, compileHaskellFile, runProcess', delFile)
 
 import XmlToQ () -- not needed here, force type checking
 
@@ -74,19 +75,10 @@ readTestFile f = do
     splitRest err = error $ f ++ ": error in splitRest" ++ (show err)
     myBreak = break (`elem` ["valid:", "invalid:"])
 
-delFile f = do
-    de <- doesFileExist f
-    when de $ removeFile f
 
 -- testCases :: FilePath -> FilePath -> FilePath -> FilePath -> TestFile -> Test
 testCases hs exeF xmlF dtdF (TestFile f dtd valid invalid) =
   let tests = zip (cycle [dtd]) $ zip (cycle [True]) valid ++ zip (cycle [False]) invalid
-      runProcess' name app args  = do
-              out <- openFile ( (dropFileName hs) </> name ++ ".log" ) WriteMode
-              p <- runProcess app args Nothing Nothing Nothing (Just out) (Just out)
-              waitForProcess p
-              hClose out
-              return p
       ecToBool ExitSuccess = True
       ecToBool _ = False
       testAction :: (Int, ( String, (Bool, String))) -> Test
@@ -106,7 +98,7 @@ testCases hs exeF xmlF dtdF (TestFile f dtd valid invalid) =
         case xmllint of
           Nothing -> putStrLn "warning, no xmllint found !"
           Just p -> do 
-               h <- runProcess' "xmllint" p ["--valid","--loaddtd", "--noout", "--load-trace", xmlF ]
+               h <- runProcess' (dropFileName hs) "xmllint" p ["--valid","--loaddtd", "--noout", "--load-trace", xmlF ]
                         
                ec <- waitForProcess h
                (Just vim) <- findExecutable "vim"
@@ -118,60 +110,17 @@ testCases hs exeF xmlF dtdF (TestFile f dtd valid invalid) =
                -}
                when (ecToBool ec /= valid) $ fail $ " valid = " ++ (show valid) ++ " expected, but >> xmllint << exited with " ++ (show ec)
 
-        let extraFlags = tail [ ""
-#ifndef DoValidate
-                             , "-DDoValidate" , "-XOverlappingInstances"
-#endif
-#ifndef TypeToNatTypeEq
-                             , "-XOverlappingInstances"
-#else
-                             , "-DTypeToNatTypeEq"
-#endif
-                             ]
-
  
+        putStrLn $ "writing to " ++ hs
         -- try this library, there is already a dependency on HaXml, so why not
         -- use it to parse the xml code again?
-        writeFile hs $ unlines [
-            "-- packages: HaXml,template-haskell,containers,directory,mtl,HList,filepath"
-          , "-- ghc-options: -XOverlappingInstances, -cpp" ++ concatMap (", " ++ ) extraFlags
-          , "{-# OPTIONS_GHC -fcontext-stack=200 #-}"
-          , "{-# LANGUAGE UndecidableInstances, FlexibleContexts,  MultiParamTypeClasses,"
-          , "FlexibleInstances,  EmptyDataDecls,  TemplateHaskell #-}"
-          , "-- based on " ++ (cwd </> f)
-          , "module Main where"
-          , "import Language.Haskell.TH"
-          , "import Control.Monad"
-          , "import Directory"
-          , "import Data.HList"
-          , "import Data.Maybe"
-          , "import Control.Exception"
-          , "import System.FilePath"
-          , "import System.IO"
-          , "import System.Environment"
-          , "import Text.XML.Validated.Types"
-          , "import Text.XML.Validated.Instance.String"
-          , "import Text.XML.HaXml.Parse"
-          , "import qualified Data.Map as M"
-          , "import Data.Maybe"
-          , "import Text.XML.HaXml.Types"
-          , "import Text.XML.Validated.TH"
-          , "import XmlToQ"
-          , "$( dtdToTypes \"" ++ dtdF ++ "\" (XmlIds (Nothing) (Just \"" ++ dtdF ++ "\") ) )"
-          , "main = $(xmlToQ \"" ++ xmlF ++ "\")" 
-          ]
-        mghc <- findExecutable "ghc"
-        delFile exeF
-        case mghc of
-          Nothing -> error "fatal, no ghc found to run the tests!"
-          Just ghc -> do 
-              let flags = [ "-i" ++ (cwd</>"src"), "-i" ++ (cwd</>"test"), "-cpp"]
-                          ++ extraFlags ++ [ "--make", "-o", exeF, hs ]
-
-              putStrLn $ "   cmd:  ghc " ++ (unwords flags)
-              h <- runProcess' "ghc" ghc flags
-              ec <- waitForProcess h
-              when (ecToBool ec /= valid) $ fail $ " valid = " ++ (show valid) ++ " expected, but ghc exited with " ++ (show ec)
+        writeFile hs $ haskellFile cwd Nothing ["XmlToQ"] [
+              "-- based on " ++ (cwd </> f)
+            , "$( dtdToTypes \"" ++ dtdF ++ "\" (XmlIds (Nothing) (Just \"" ++ dtdF ++ "\") ) )"
+            , "main = $(xmlToQ  \"\" \"" ++ xmlF ++ "\")" 
+            ]
+        ec <- compileHaskellFile cwd hs exeF
+        when (ecToBool ec /= valid) $ fail $ " valid = " ++ (show valid) ++ " expected, but ghc exited with " ++ (show ec)
               -- TODO parse the generated result file and compare against input 
   in f ~: TestList $ map testAction $ zip [1..] tests
 

@@ -65,3 +65,24 @@ executable     run-testcases
   extensions: CPP
   if flag(DoValidate)
     cpp-options: -DDoValidate
+
+
+executable     run-benchpress-test
+  main-is:        run-benchpress-test.hs
+  hs-source-dirs: test, src
+  build-depends:   haskell98
+                  , base
+                  , HList
+                  , HaXml >= 1.19
+                  , filepath
+                  , mtl
+                  , pretty
+                  , containers
+                  , HUnit
+                  , template-haskell
+                  , directory
+                  , process
+                  , benchpress
+  extensions: CPP
+  if flag(DoValidate)
+    cpp-options: -DDoValidate
