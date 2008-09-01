@@ -1,0 +1,21 @@
+dtd:
+<!ELEMENT root (a|b)*>
+
+<!ENTITY % ent "((x,y)*,z,(x,y)*)" >
+
+<!ELEMENT a ( %ent; )>
+<!ELEMENT b ( %ent; )>
+
+<!ELEMENT x EMPTY>
+<!ELEMENT y EMPTY>
+<!ELEMENT z EMPTY>
+valid:
+<root> <a> <z/> </a> </root>
+valid:
+<root> <a> <x/> <y/>  <z/> </a> </root>
+valid:
+<root> <a> <x/> <y/> <x/> <y/>  <z/> </a> </root>
+valid:
+<root> <a> <z/> <x/> <y/> <x/> <y/>  </a> </root>
+invalid:
+<root> <a> <x/> <y/> <x/> <y/> </a> </root>
