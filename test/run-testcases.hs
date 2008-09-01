@@ -126,7 +126,10 @@ testCases hs exeF xmlF dtdF (TestFile f dtd valid invalid) =
 
 
 main = do
-  [testcasesDir, from, count] <- getArgs
+  (testcasesDir: pref') <- getArgs
+  let pref = case pref' of
+                [] -> ""
+                [a] -> a
   list <- liftM ( map (testcasesDir </>)
                 . filter (".txt" `isSuffixOf`) ) $ getDirectoryContents testcasesDir
   tmpDir <- getTemporaryDirectory
@@ -140,5 +143,5 @@ main = do
         , "manually after this test" ]
 
 
-  (testFiles :: [TestFile] ) <- mapM readTestFile $ (take (read count)) $ (drop (read from)) list
+  (testFiles :: [TestFile] ) <- mapM readTestFile $ filter (isPrefixOf pref . takeFileName) list
   runTestTT $ TestList $ map (testCases hs exe xml dtd) testFiles
