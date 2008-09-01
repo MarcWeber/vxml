@@ -21,19 +21,33 @@ import Text.XML.HaXml.Types
 import Text.XML.HaXml.Types
 import Text.XML.Validated.TH
 
-import TestXHTML as X
+import TestXHTML
+
+(#) = flip (.)
 
 main = do
 
+  -- you probably want to use names without _T and _A if possible 
   putStrLn $ xml $
-    ((html << ( X.head << (title <<< "hw")
-                    << (link `rel_A` "stylesheet" `type_A` "text/css" `href_A` "style.css")
+    ((html_T << ( head_T << (title_T <<< "hw")
+                         << (link_T `rel_A` "stylesheet" `type_A` "text/css" `href_A` "style.css")
               ))
-          <<  ( body << ((script `type_A` "text/javascript") <<< "document.writeln('hi');" )
-                     << (div `onclick_A` "alert('clicked');" `style_A` "color:#F79"
+          <<  ( body_T << ((script_T `type_A` "text/javascript") <<< "document.writeln('hi');" )
+                       << (div_T `onclick_A` "alert('clicked');" `style_A` "color:#F79"
                               <<< "text within the div"
                         )
               ) )
+  putStrLn "alternative user interface"
+  putStrLn $ xml $
+    ( headC ( (titleC (<<< "hw"))
+            # (linkC (rel_AF "stylesheet" # type_AF "text/css" # href_AF "style.css" ) )
+            )
+    # bodyC ( scriptC ( type_AF "text/javascript" # text "document.writeln('hi');" )
+            # divC ( onclick_AF "alert('clicked')" # style_AF "color:#F79"
+                  # text "text within the div" )
+            )
+    ) html_T
+
   print "end"
 
 

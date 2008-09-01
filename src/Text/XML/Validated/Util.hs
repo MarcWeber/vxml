@@ -20,6 +20,8 @@ appn app f = appn' f . reverse
   where appn' f [] = f
         appn' f (a:as) = app (appn' f as) a
 
+arrowTn = foldr1 (\n o -> appTn arrowT [n,o] )
+
 -- undefined :: t
 undType :: TypeQ -> ExpQ
 undType t = sigE (varE 'undefined) t

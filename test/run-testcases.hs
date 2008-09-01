@@ -23,7 +23,7 @@ into getTemporaryDirectory
 
 -}
 
- 
+
 
 module Main where
 import Data.Char
@@ -52,22 +52,22 @@ readTestFile :: FilePath -> IO TestFile
 readTestFile f = do
   fContents <- readFile f
   return $ split f $ lines fContents
-  where 
-    split f ("dtd:":lines) = 
+  where
+    split f ("dtd:":lines) =
         let (dtd, rest) = myBreak lines
             (valid, invalid) = splitRest rest
-        in TestFile f (unlines dtd) valid 
+        in TestFile f (unlines dtd) valid
 #ifdef DoValidate
                     invalid
 #else
                     [] -- does QuickCheck support skipping invalid tests?
 #endif
     splitRest :: [ String ] -> ([String], [String])
-    splitRest ("valid:":lines) = 
+    splitRest ("valid:":lines) =
         let (valid, rest) = myBreak lines
             (valid', invalid) = splitRest rest
         in ((unlines valid):valid', invalid)
-    splitRest ("invalid:":lines) = 
+    splitRest ("invalid:":lines) =
         let (invalid, rest) = myBreak lines
             (valid, invalid') = splitRest rest
         in (valid, (unlines invalid) :  invalid')
@@ -84,7 +84,7 @@ testCases hs exeF xmlF dtdF (TestFile f dtd valid invalid) =
       testAction :: (Int, ( String, (Bool, String))) -> Test
       testAction (n, (dtdContent, (valid, xmlContent))) = TestLabel ({- (show f) ++-} (show n)) $ TestCase $ assert $ do
         cwd <- getCurrentDirectory
-        let rootElement = ( 
+        let rootElement = (
                         takeWhile (not . isSpace)
                       . dropWhile isSpace
                       . drop (length "<!ELEMENT ")
@@ -93,35 +93,36 @@ testCases hs exeF xmlF dtdF (TestFile f dtd valid invalid) =
         writeFile xmlF ( "<!DOCTYPE " ++ rootElement ++ " SYSTEM \"" ++ dtdF ++ "\">" ++ xmlContent)
         writeFile dtdF $ "<!-- " ++cwd </> f ++" --> \n" ++ dtd
 
-        -- try xmllint 
+        -- try xmllint
         xmllint <- findExecutable "xmllint"
         case xmllint of
           Nothing -> putStrLn "warning, no xmllint found !"
-          Just p -> do 
+          Just p -> do
                h <- runProcess' (dropFileName hs) "xmllint" p ["--valid","--loaddtd", "--noout", "--load-trace", xmlF ]
-                        
+
                ec <- waitForProcess h
                (Just vim) <- findExecutable "vim"
                {- run vim to edit files which don't pass xmllint the expected way
-               when (ecToBool ec /= valid) $ do 
+               when (ecToBool ec /= valid) $ do
                   p <- runProcess vim [ "-p", xmlF, dtdF, f, "-c", ":w|cope" ] Nothing Nothing Nothing Nothing Nothing
                   waitForProcess p
                   return ()
                -}
                when (ecToBool ec /= valid) $ fail $ " valid = " ++ (show valid) ++ " expected, but >> xmllint << exited with " ++ (show ec)
 
- 
+
         putStrLn $ "writing to " ++ hs
         -- try this library, there is already a dependency on HaXml, so why not
         -- use it to parse the xml code again?
         writeFile hs $ haskellFile cwd Nothing ["XmlToQ"] [
-              "-- based on " ++ (cwd </> f)
-            , "$( dtdToTypes \"" ++ dtdF ++ "\" (XmlIds (Nothing) (Just \"" ++ dtdF ++ "\") ) )"
-            , "main = $(xmlToQ  \"\" \"" ++ xmlF ++ "\")" 
+              "import Prelude (undefined)"
+            , "-- based on " ++ (cwd </> f)
+            , "$( dtdToTypes (Just simpleNameGenerator) \"" ++ dtdF ++ "\" (XmlIds (Nothing) (Just \"" ++ dtdF ++ "\") ) )"
+            , "main = $(xmlToQ (simpleNameGenerator undefined undefined) \"\"  \"" ++ xmlF ++ "\")"
             ]
         ec <- compileHaskellFile cwd hs exeF
         when (ecToBool ec /= valid) $ fail $ " valid = " ++ (show valid) ++ " expected, but ghc exited with " ++ (show ec)
-              -- TODO parse the generated result file and compare against input 
+              -- TODO parse the generated result file and compare against input
   in f ~: TestList $ map testAction $ zip [1..] tests
 
 
@@ -137,7 +138,7 @@ main = do
   let dtd = tmpDir </> "dtd.dtd"
   let hs  = tmpDir </> "test.hs"
   let exe = tmpDir </> "test"
-  putStrLn $ unlines [ 
+  putStrLn $ unlines [
         "you'll have to remove the testfiles "
         , xml ++ ", " ++ dtd
         , "manually after this test" ]

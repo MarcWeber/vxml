@@ -2,8 +2,9 @@
 module Text.XML.Validated.TH (
   dtdToTypes
   -- exported for XmlToQ.hs
-  , attrHaskell
-  , elementHaskellName
+  , simpleNameGenerator
+  , intelligentNameGenerator
+  , NameGenerator(..)
 ) where
 import Debug.Trace
 import Data.HList
@@ -204,8 +205,9 @@ data DataState = DataState {
   , stateList :: StateList  -- try reusing state transformations to not get too many instances..
   , realised :: S.Set Int -- list of already realised state state transformations
                     -- (thus class and data type already has been generated)
+  , nameGen :: NameGenerator
   }
-initialDataState = DataState S.empty emptyStateList S.empty
+initialDataState = DataState S.empty emptyStateList S.empty (simpleNameGenerator undefined undefined)
 
 -- all the template stuff
 
@@ -232,14 +234,8 @@ instanceShow dataName value = do
     [funD 'show [ clause [wildP] (normalB (litE . stringL $ value)) []] ]
 
 
-attrHaskell = (++ "_A") . fstUpper
-attrHaskellName = mkName . attrHaskell
-elementHaskell = (++ "_T") . fstUpper
-elementHaskellName = mkName .  elementHaskell
-
 #ifdef DoValidate
 -- initial state ready for starting type based parser
-conEl = (conT . elementHaskellName) -- private
 elementState :: String -> H.ContentSpec -> StateT DataState Q (TypeQ, [DecQ])
 elementState n H.EMPTY = return $ (conT ''T.EMPTY, [])
 elementState n H.ANY = return $ (conT ''T.ANY, [])
@@ -274,17 +270,18 @@ realise n stF = do
         stListRev = (M.fromList . M.elems . stateReduction ) stList'  -- to Map id NextState
         sts = S.fromList $ usedSTS (S.empty) stListRev id
         new = sts `S.difference` (realised gs)
+        ng = nameGen gs
     put $ gs { stateList = stList', realised = (realised gs) `S.union` new }
     when debugStateCount $ ST.lift $ runIO $ do
       hPutStrLn stdout $ n ++ " states: " ++ (show $ S.size sts) ++ " new : " ++ (show $ S.size new)
       hFlush stdout
     return $ ( conT $ stateName id
-             , concatMap (\id -> realiseST id . fromJust . M.lookup id $ stListRev) (S.elems new))
+             , concatMap (\id -> realiseST ng id . fromJust . M.lookup id $ stListRev) (S.elems new))
   where
-        realiseST id (NextState endable msg elmap) =
+        realiseST ng id (NextState endable msg elmap) =
           let n = stateName id
               instances = let el PCDATA = conT ''T.PCDATA
-                              el (T s) = appT (conT ''T.Elem) (conT $ elementHaskellName s)
+                              el (T s) = appT (conT ''T.Elem) (conT $ mkName $ (dataElName ng) s)
                               st C = conT ''T.C
                               st (St id) = conT $ stateName id
                           in map ( \(chd, trState) ->
@@ -334,7 +331,8 @@ deriving instance Show H.NDataDecl
 
 toCode ::  ( String, (Maybe H.ElementDecl, Maybe H.AttListDecl)) -> StateT DataState Q [Dec]
 toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) ) = do
-  let elDataName  =  elementHaskellName n
+  ng <- gets nameGen
+  let elDataName = mkName $ (dataElName ng) n
 
   (es, states) <- elementState n content
   ST.lift $ sequence  ([
@@ -344,14 +342,24 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
 
    , -- function elname for convinience
    let [elType, initialState, el] = map mkName [ "elType", "initialState", "el"]
-   in sigD (mkName $ fstLower n) $ -- why do I need this type signature ?
+   in sigD (mkName $ (uiElName ng) n) $ -- why do I need this type signature ?
      forallT [elType, initialState, el]
        (cxt [ appTn (conT ''T.InitialState) [ conT elDataName, varT initialState ]
             , appTn (conT ''CreateEl) [ conT elDataName, varT el ]
             ]) (appTn (conT ''PT) [varT initialState, varT el])
-   , funD (mkName $ fstLower n)
+   , funD (mkName $ (uiElName ng) n)
      [ clause [] (normalB (appEn (varE 'createElT) [undType (conT elDataName)] ) ) []]
 
+   , -- function elname with content for convinience
+   -- nameC :: (el -> el) -> (el -> el)
+   -- nameC addContent = `addElT` (addContent name)
+     let addContent = mkName "addContent"
+     in funD (mkName $ (uiElNameContent ng) n)
+     [ clause [ varP addContent ] (normalB (
+                   infixE Nothing (varE 'addElT)
+                          (Just $ appE (varE addContent)
+                                       (varE $ mkName $ (uiElName ng) n))
+                 ) ) []]
    , -- instanceElementShow
    instanceShow elDataName n
 
@@ -363,7 +371,7 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
 #ifdef DoValidate
          attr a = appT (conT ''A) a
 
-         reqAttributes =    hlist [ attr $ conT $ attrHaskellName name
+         reqAttributes =    hlist [ attr $ conT $ mkName $ (dataAttrName ng) name
                                  | (H.AttDef name attType H.REQUIRED) <- attdefList ]
 #endif
          state = mytrace (show attdefList) $
@@ -385,76 +393,141 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
                           ]
     in instanceD (cxt [])  -- (CreateEl <type> el)
                 (appTn (conT ''T.InitialState) [conT elDataName, state])  []
-           -- [funD 'T.initialState [ clause [wildP] (normalB ( varE 'undefined )) []] ]
 
     ]
     ++ ( -- AttrOk instances
-          [ instanceD (cxt ([])) (appTn (conT ''AttrOk) [ conT elDataName, conT $ attrHaskellName name ] ) []
+          [ instanceD (cxt ([])) (appTn (conT ''AttrOk)
+                                        [ conT elDataName
+                                        , conT $ mkName $ (dataAttrName ng) name ] ) []
           | (H.AttDef name attType _) <- attdefList ]
        )
     -- state data typens and state transforming instances
     ++ states
     )
 
-dtdToTypes :: FilePath -> XmlIds -> Q [Dec]
-dtdToTypes file (XmlIds pub sys) = (flip evalStateT) (initialDataState) $ do
-  read <- ST.lift $ runIO $ liftM (dtdParse' file) $ readFile file
+data NameGenerator = NameGenerator {
+
+  -- internal representation of types
+    dataElName :: String -> String
+  , dataAttrName :: String -> String
+
+  -- user interface
+  , uiElName :: String -> String   -- the function to create an element
+  , uiElNameContent :: String -> String -- (el id) or div (onclick_A "foo" . onkeypress_A "bar" . addParagraph )
+  , uiAddAttr :: String -> String -- the function adding an attribute  el `onclick_A` "text"
+  , uiAddAttrFlip :: String -> String
+  }
+
+-- used by test cases, default is intelligentNameGenerator
+simpleNameGenerator :: [ String ] -> [ String ] -> NameGenerator
+simpleNameGenerator _ _ = NameGenerator {
+    dataElName = (++ "_T") . fstUpper
+  , dataAttrName = (++ "_A") . fstUpper
+
+  -- user interface
+  , uiElName = fstLower
+  , uiElNameContent = (++ "C") . fstLower
+  , uiAddAttr = (++ "_A") . fstLower
+  , uiAddAttrFlip = (++ "_AF") . fstLower
+}
+
+intelligentNameGenerator :: [ String ] -> [ String ] -> NameGenerator
+intelligentNameGenerator els attrs =
+  (simpleNameGenerator undefined undefined) {
+      uiElName = fstLower
+    , uiElNameContent = (++ "C") . fstLower
+    , uiAddAttr = (++ "_A") . fstLower
+      -- if there is an element with the same name append an A
+    , uiAddAttrFlip = let an :: String -> String
+                          an n = if n `elem` els then n ++ "A" else n
+                          map' = M.fromList $ map (\n -> (n, an n)) attrs
+                      in  fromJust .(flip M.lookup) map'
+  }
+
+dtdToTypes :: Maybe ([String] {- el names -} -> [String] {- attr names -} -> NameGenerator)
+              -> FilePath -> XmlIds -> Q [Dec]
+dtdToTypes mbNG file (XmlIds pub sys) = do
+  read <- runIO $ liftM (dtdParse' file) $ readFile file
   case read of
     Left a -> fail a
-    Right (Just (H.DTD name mbExtId decls))  -> do
-    let zipped = zipElements decls
-    let attrNamesUniq = nub $ map (\(H.AttDef n _ _) -> n)
-                            $ concatMap ( (\(Just (H.AttListDecl _ l)) -> l) . snd . snd ) zipped
-    -- shared attribute names and instances
-    attrDecs <- liftM concat $ mapM (\ n ->
-                  do let name = attrHaskell n
-                         nameN = mkName name
-                     ST.lift $ do
-                       d <- dataD (cxt []) nameN [] [] []
-                       s <- instanceShow nameN n
-                       add <- let [el,val] = map mkName ["el", "val"]
-                              in  funD (mkName $ fstLower name)
-                                    [ clause [ varP el, varP val ]
-                                        (normalB $ appEn (varE 'addAttrT)
-                                                          [ varE el
-                                                          , sigE (varE 'undefined) (conT $ nameN)
-                                                          , varE val ]
-                                        ) [] ]
-                       return [d,s,add] ) attrNamesUniq
+    Right (Just (H.DTD name mbExtId decls))  ->
+      let
+          zipped = zipElements decls
+          attrNamesUniq = nub $ map (\(H.AttDef n _ _) -> n)
+                              $ concatMap ( (\(Just (H.AttListDecl _ l)) -> l) . snd . snd ) zipped
+          ng = (fromMaybe intelligentNameGenerator mbNG) (map fst zipped) attrNamesUniq
 
-    -- | elements and attribute data belonging to it
-    types <- liftM concat $ mapM toCode zipped
+      in (flip evalStateT) (initialDataState { nameGen = ng } ) $ do
+        -- shared attribute names and instances
+        attrDecs <- liftM concat $ mapM (\ n ->
+                      do let name = (dataAttrName ng) n
+                             nameN = mkName name
+                             uiName = (uiAddAttr ng) n
+                             uiNameFlip = (uiAddAttrFlip ng) n
+                         ST.lift $ do
+                           d <- dataD (cxt []) nameN [] [] []
+                           s <- instanceShow nameN n
+                           add <- let [el,val] = map mkName ["el", "val"]
+                                  in  funD (mkName uiName)
+                                        [ clause [ varP el, varP val ]
+                                            (normalB $ appEn (varE 'addAttrT)
+                                                              [ varE el
+                                                              , sigE (varE 'undefined) (conT $ nameN)
+                                                              , varE val ]
+                                            ) [] ]
+                           -- why do I need the type decl?
+                           addFlipDecl <-
+                             let [st, st2, el] = map mkName [ "st", "st2", "elx"]
+                             in sigD (mkName $ uiNameFlip) $
+                                 forallT [st, st2, el]
+                                   (cxt [  --  (AddAttrT Attr_A st st2 el)
+                                          appTn (conT ''T.AddAttrT) ( [ conT (mkName name), varT st, varT st2, varT el] )
+                                        ]) -- PT st el -> attrType -> String -> PT st2 el
+                                           (arrowTn [ conT ''String
+                                                    , appTn (conT ''PT) [ varT st, varT el]
+                                                    , appTn (conT ''PT) [ varT st2, varT el]
+                                                    ] )
+                           addFlip <- funD (mkName $ uiNameFlip)
+                                        [ clause []
+                                            (normalB $ appE (varE 'flip) (varE $ mkName uiName)
+                                            ) [] ]
 
-    docClass <- ST.lift $
-      let toMaybeStr Nothing = conE 'Nothing
-          toMaybeStr (Just s) = appE (conE 'Just) (litE . stringL $ s)
-      in sequence [
-        instanceD (cxt []) (appT (conT ''XmlIdsFromRoot) ( (conT . elementHaskellName . fst . head) zipped) )
-            [ funD 'xmlIds [ clause [wildP] (normalB (appEn (conE 'XmlIds) (map toMaybeStr [pub, sys]))) []] ]
-        ]
+                           return [d,s,add,addFlip,addFlipDecl] ) attrNamesUniq
 
-    let all = attrDecs ++ types ++ docClass
-    gs <- ST.get
-    let text = unlines $    -- error hints
-                            (  let map = (M.fromList . M.elems . stateReduction . stateList ) gs
-                               in [ "err msg " ++ (stateName' i) ++ ": "
-                                    ++ (msg . fromJust $ M.lookup i map)
-                                  | i <- S.elems (realised gs) ]
-                            )
-                         ++ ( if showGeneratedCode then
-                                  ("-- ============= generated code based on " ++ file)
-                                   : map pprint all
-                                   ++ [ "-- ============ generated code end =====================================" ]
-                         else [] )
+        -- | elements and attribute data belonging to it
+        types <- liftM concat $ mapM toCode zipped
 
-                         ++ if debugStates then [ "debug states: ", show (stateList gs)] else []
+        -- XmlIdsFromRoot instance
+        docClass <- ST.lift $
+          let toMaybeStr Nothing = conE 'Nothing
+              toMaybeStr (Just s) = appE (conE 'Just) (litE . stringL $ s)
+          in sequence [
+            instanceD (cxt []) (appT (conT ''XmlIdsFromRoot) ( (conT . mkName . (dataElName ng) . fst . head) zipped) )
+                [ funD 'xmlIds [ clause [wildP] (normalB (appEn (conE 'XmlIds) (map toMaybeStr [pub, sys]))) []] ]
+            ]
 
-    when showGeneratedCode $ ST.lift $ runIO $ do -- for debugging purposes print generated code
-             hPutStrLn stdout text
-             hFlush stdout
-    when writeInfoFile $ ST.lift $ runIO $ do
-       let dir = "autogenerated-code"
-       createDirectoryIfMissing False dir
-       writeFile (dir </> (takeFileName file)) text
+        let all = attrDecs ++ types ++ docClass
+        gs <- ST.get
+        let text = unlines $    -- error hints
+                                (  let map = (M.fromList . M.elems . stateReduction . stateList ) gs
+                                   in [ "err msg " ++ (stateName' i) ++ ": "
+                                        ++ (msg . fromJust $ M.lookup i map)
+                                      | i <- S.elems (realised gs) ]
+                                )
+                             ++ ( if showGeneratedCode then
+                                      ("-- ============= generated code based on " ++ file)
+                                       : map pprint all
+                                       ++ [ "-- ============ generated code end =====================================" ]
+                             else [] )
 
-    return all
+                             ++ if debugStates then [ "debug states: ", show (stateList gs)] else []
+
+        when showGeneratedCode $ ST.lift $ runIO $ do -- for debugging purposes print generated code
+                 hPutStrLn stdout text
+                 hFlush stdout
+        when writeInfoFile $ ST.lift $ runIO $ do
+           let dir = "autogenerated-code"
+           createDirectoryIfMissing False dir
+           writeFile (dir </> (takeFileName file)) text
+
+        return all

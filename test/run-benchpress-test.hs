@@ -1,5 +1,5 @@
 {-# LANGUAGE PatternSignatures #-}
-{- to be run from repo dir 
+{- to be run from repo dir
 -}
 module Main where
 import Test.BenchPress
@@ -28,27 +28,28 @@ test tmp repoDir = do
       exe = tmP "main"
       importHs = tmP "Import.hs"
 
-  -- setup action 
+  -- setup action
   let setup = do
-          -- DTD 
+          -- DTD
           copyFile (repoDir </> "dtds/xhtml1-20020801/DTD/xhtml1-strict_onefile.dtd") dtdF
-          -- Main.hs 
+          -- Main.hs
           writeFile mainHs $ haskellFile repoDir Nothing ["Import", "XmlToQ"] [
-             "main = $(xmlToQ \"Import.\" \"" ++ xmlF ++ "\")" 
+             "main = $(xmlToQ (simpleNameGenerator undefined undefined) \"Import.\" \"" ++ xmlF ++ "\")"
             ]
-          -- Import.hs 
+          -- Import.hs
           writeFile importHs $ haskellFile repoDir (Just "Import") [] [
-              "$( dtdToTypes \"" ++ dtdF ++ "\" (XmlIds (Nothing) (Just \"" ++ dtdF ++ "\") ) )"
+              "import Prelude ()"
+            , "$( dtdToTypes (Just simpleNameGenerator) \"" ++ dtdF ++ "\" (XmlIds (Nothing) (Just \"" ++ dtdF ++ "\") ) )"
             ]
          -- test action
   let test repeat = do
-        -- xml.xml 
+        -- xml.xml
         writeFile xmlF $  unlines $  ["<!DOCTYPE html SYSTEM \"" ++ dtdF ++ "\">" ]
                           ++ xmlhead ++ ( concat $ replicate repeat xmlbody) ++ [ "</body></html>" ]
         writeFile (tmP "count") $ show repeat
         mapM_ delFile $ map tmP ["Main.o", "main", "Main.hi"]
         ec <- compileHaskellFile repoDir mainHs exe
-        case ec of 
+        case ec of
           ExitFailure ef -> error "exit failure ghc"
           ExitSuccess -> return ()
 
@@ -71,7 +72,7 @@ main = do
   repoDir <- getCurrentDirectory
   Main.test tmp repoDir
 
-xmlhead = 
+xmlhead =
         [ "<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en-US\" xml:lang=\"en-US\">"
         , "<head>"
         , "  <title>Example 6 - XHTML 1.0 Strict as application/xhtml+xml</title>"
@@ -81,7 +82,7 @@ xmlhead =
         , "<body>"
         ]
 
-xmlbody = 
+xmlbody =
         [ "  <h1>Example 6 - XHTML 1.0 Strict as application/xhtml+xml</h1>"
         , "  <p>"
         , "   This document is valid XHTML 1.0 Strict served as"

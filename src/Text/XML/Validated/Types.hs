@@ -21,6 +21,7 @@ module Text.XML.Validated.Types (
   -- , XmlDocT(..) -- use xml instead
   , xml    -- validate, return result type of root element with doctype
   , fromPT -- validate, return resulty type of any non root element
+  , text -- flip addTextT
 
   -- implementation for different result types:
   -- see example in Instances
@@ -128,6 +129,10 @@ fromPT' (PT _ v) = v
 xml = xmlDocT
 (<<) = addElT
 (<<<) = addTextT
+text :: ( AddTextT el el2 String elst elst2
+        , AddText el2 String
+        ) => String -> PT elst el -> PT elst2 el2
+text = flip addTextT
 
 -- ========== classes to generate the result type ====================
 -- mainly targeting kind of String output (see Instances/ * )
