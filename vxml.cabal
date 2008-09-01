@@ -29,60 +29,60 @@ Library
     cpp-options: -DDoValidate
     extensions: OverlappingInstances
 
--- executable     test
---   main-is:        test.hs
---   hs-source-dirs: test, src
---   build-depends:   haskell98
---                   , base
---                   , HList
---                   , HaXml >= 1.19
---                   , filepath
---                   , mtl
---                   , pretty
---                   , containers
---                   , template-haskell
---   extensions: CPP
---   if flag(DoValidate)
---     cpp-options: -DDoValidate
---     extensions: OverlappingInstances
--- 
--- 
--- executable     run-testcases
---   main-is:        run-testcases.hs
---   hs-source-dirs: test, src
---   build-depends:   haskell98
---                   , base
---                   , HList
---                   , HaXml >= 1.19
---                   , filepath
---                   , mtl
---                   , pretty
---                   , containers
---                   , HUnit
---                   , template-haskell
---                   , directory
---                   , process
---   extensions: CPP
---   if flag(DoValidate)
---     cpp-options: -DDoValidate
--- 
--- 
--- executable     run-benchpress-test
---   main-is:        run-benchpress-test.hs
---   hs-source-dirs: test, src
---   build-depends:   haskell98
---                   , base
---                   , HList
---                   , HaXml >= 1.19
---                   , filepath
---                   , mtl
---                   , pretty
---                   , containers
---                   , HUnit
---                   , template-haskell
---                   , directory
---                   , process
---                   , benchpress
---   extensions: CPP
---   if flag(DoValidate)
---     cpp-options: -DDoValidate
+executable     test
+  main-is:        test.hs
+  hs-source-dirs: test, src
+  build-depends:   haskell98
+                  , base
+                  , HList
+                  , HaXml >= 1.19
+                  , filepath
+                  , mtl
+                  , pretty
+                  , containers
+                  , template-haskell
+  extensions: CPP
+  if flag(DoValidate)
+    cpp-options: -DDoValidate
+    extensions: OverlappingInstances
+
+
+executable     run-testcases
+  main-is:        run-testcases.hs
+  hs-source-dirs: test, src
+  build-depends:   haskell98
+                  , base
+                  , HList
+                  , HaXml >= 1.19
+                  , filepath
+                  , mtl
+                  , pretty
+                  , containers
+                  , HUnit
+                  , template-haskell
+                  , directory
+                  , process
+  extensions: CPP
+  if flag(DoValidate)
+    cpp-options: -DDoValidate
+
+
+executable     run-benchpress-test
+  main-is:        run-benchpress-test.hs
+  hs-source-dirs: test, src
+  build-depends:   haskell98
+                  , base
+                  , HList
+                  , HaXml >= 1.19
+                  , filepath
+                  , mtl
+                  , pretty
+                  , containers
+                  , HUnit
+                  , template-haskell
+                  , directory
+                  , process
+                  , benchpress
+  extensions: CPP
+  if flag(DoValidate)
+    cpp-options: -DDoValidate
