@@ -129,9 +129,9 @@ fromPT' (PT _ v) = v
 xml = xmlDocT
 (<<) = addElT
 (<<<) = addTextT
-text :: ( AddTextT el el2 String elst elst2
+text :: ( AddTextT el el2 text elst elst2
         , AddText el2 String
-        ) => String -> PT elst el -> PT elst2 el2
+        ) => text -> PT elst el -> PT elst2 el2
 text = flip addTextT
 
 -- ========== classes to generate the result type ====================

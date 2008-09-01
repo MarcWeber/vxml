@@ -477,13 +477,13 @@ dtdToTypes mbNG file (XmlIds pub sys) = do
                                             ) [] ]
                            -- why do I need the type decl?
                            addFlipDecl <-
-                             let [st, st2, el] = map mkName [ "st", "st2", "elx"]
+                             let [text, st, st2, el] = map mkName [ "text", "st", "st2", "elx"]
                              in sigD (mkName $ uiNameFlip) $
-                                 forallT [st, st2, el]
+                                 forallT [text, st, st2, el]
                                    (cxt [  --  (AddAttrT Attr_A st st2 el)
                                           appTn (conT ''T.AddAttrT) ( [ conT (mkName name), varT st, varT st2, varT el] )
                                         ]) -- PT st el -> attrType -> String -> PT st2 el
-                                           (arrowTn [ conT ''String
+                                           (arrowTn [ varT text
                                                     , appTn (conT ''PT) [ varT st, varT el]
                                                     , appTn (conT ''PT) [ varT st2, varT el]
                                                     ] )
