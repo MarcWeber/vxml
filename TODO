@@ -1,0 +1,16 @@
+What does already work:
+======================================================================
+ensuring the correct order of sub elements (tags)
+ensuring that only listed attributes can be added
+ensuring that required attributes are added
+
+
+to be done
+======================================================================
+* optimize for speed 
+* implement all dtd constraints for attributes, not only required and allowed
+* add tests http://www.w3.org/XML/Test/
+* support for &..; entitiy refs
+* ...
+
+docs : http://www.w3.org/TR/xml11/
