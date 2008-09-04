@@ -11,7 +11,7 @@ instance (Show elType) => CreateEl elType String where
   createEl _ = "<" ++ (show (undefined :: elType))
 
 instance (Show attrType
-         ) => AddAttribute String attrType where 
+         ) => AddAttribute String attrType String where 
   addAttribute tag _ value = 
       tag ++ " " ++ (show (undefined :: attrType) ) 
       ++ "=\"" ++ (stringToHtmlString value) ++ "\""

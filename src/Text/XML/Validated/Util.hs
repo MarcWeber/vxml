@@ -10,9 +10,6 @@ import Text.XML.Validated.Types
 fstUpper (x:xs) = toUpper x : xs
 fstLower (x:xs) = toLower x : xs
 
-cName = conT . mkName
--- vName = varE . mkName
-
 appEn :: ExpQ -> [ ExpQ ] -> ExpQ
 appEn t l = appn appE t l
 appTn t l = appn appT t l

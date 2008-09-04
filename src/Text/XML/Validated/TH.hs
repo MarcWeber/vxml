@@ -332,54 +332,17 @@ deriving instance Show H.NDataDecl
 toCode ::  ( String, (Maybe H.ElementDecl, Maybe H.AttListDecl)) -> StateT DataState Q [Dec]
 toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) ) = do
   ng <- gets nameGen
+
   let elDataName = mkName $ (dataElName ng) n
 
-  (es, states) <- elementState n content
-  ST.lift $ sequence  ([
+  -- initial state 
+  (st, states) <- elementState n content
+  -- initial state attrs 
+  let reqAttributes = hlist
+          [ attr $ conT $ mkName $ (dataAttrName ng) name
+          | (H.AttDef name attType H.REQUIRED) <- attdefList ]
 
-   -- | dataElement
-   dataD (cxt []) elDataName [] [] []
-
-   , -- function elname for convinience
-   let [elType, initialState, el] = map mkName [ "elType", "initialState", "el"]
-   in sigD (mkName $ (uiElName ng) n) $ -- why do I need this type signature ?
-     forallT [elType, initialState, el]
-       (cxt [ appTn (conT ''T.InitialState) [ conT elDataName, varT initialState ]
-            , appTn (conT ''CreateEl) [ conT elDataName, varT el ]
-            ]) (appTn (conT ''PT) [varT initialState, varT el])
-   , funD (mkName $ (uiElName ng) n)
-     [ clause [] (normalB (appEn (varE 'createElT) [undType (conT elDataName)] ) ) []]
-
-   , -- function elname with content for convinience
-   -- nameC :: (el -> el) -> (el -> el)
-   -- nameC addContent = `addElT` (addContent name)
-     let addContent = mkName "addContent"
-     in funD (mkName $ (uiElNameContent ng) n)
-     [ clause [ varP addContent ] (normalB (
-                   infixE Nothing (varE 'addElT)
-                          (Just $ appE (varE addContent)
-                                       (varE $ mkName $ (uiElName ng) n))
-                 ) ) []]
-   , -- instanceElementShow
-   instanceShow elDataName n
-
-
-
-     , -- instanceElementInitialState
-
-     let
-#ifdef DoValidate
-         attr a = appT (conT ''A) a
-
-         reqAttributes =    hlist [ attr $ conT $ mkName $ (dataAttrName ng) name
-                                 | (H.AttDef name attType H.REQUIRED) <- attdefList ]
-#endif
-         state = mytrace (show attdefList) $
-                  appT (conT ''T.NYV) $
-                    appTn (conT ''T.Element)
-                          [conT elDataName
-                          , appTn (conT ''AS)
-                             [
+      stA = appTn (conT ''AS) [
 #ifdef DoValidate
                               reqAttributes
 #else
@@ -388,14 +351,130 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
                              ,
                              hlist [] {- added -}
                              ]
-                          , es
-                          , conT ''HFalse
-                          ]
-    in instanceD (cxt [])  -- (CreateEl <type> el)
-                (appTn (conT ''T.InitialState) [conT elDataName, state])  []
+      attr a = appT (conT ''A) a
+      elst = appT (conT ''NYV) $ appTn (conT ''Element) [ conT elDataName, stA, st, conT ''HFalse ]
+      classElem' = mkName $ (classElem ng) n
+      elemName' = mkName $ (elemName ng) n
+      runElemI' = mkName $ runElemI ng n
+      runElemIT' = mkName $ runElemTI ng n
 
-    ]
-    ++ ( -- AttrOk instances
+  let sigUnd =sigE (varE 'undefined)
+  ST.lift $ sequence  (
+   [
+
+   -- | dataElement
+     dataD (cxt []) elDataName [] [] []
+
+   , -- instanceElementShow
+     instanceShow elDataName n
+
+   , -- function elname for convinience
+   let [elType, initialState, el] = map mkName [ "elType", "initialState", "el"]
+   in sigD (mkName $ (uiElName ng) n) $ -- why do I need this type signature ?
+     forallT [elType, initialState, el]
+       (cxt [ appTn (conT ''CreateEl) [ conT elDataName, varT el ]
+            ]) (appTn (conT ''PT) [ elst, varT el])
+   , funD (mkName $ (uiElName ng) n)
+       [ clause [] (normalB ( appEn (conE 'PT) [ undType elst, appE (varE 'createEl) (undType (conT elDataName)) ])) []] 
+
+   , -- runElem 
+    {- runElemI :: VXML st el st2 el2 st3 el3 a -> (a, el3)
+       runElemI (VXML f) = 
+        let (a,p) = f id
+        in  p (PT (undefined :: ) (createEl (undefined :: Elem)))
+     - -}
+     let [f] = map mkName ["f"]
+     in funD runElemI' [ clause [conP 'VXML [varP f]] (normalB 
+           [|
+            let (a,p) = $(varE f) id
+            in   (a, p (T.PT $(sigUnd elst) (createEl $(sigUnd $ conT elDataName))))
+          |]) []]
+    , funD (mkName $ runElem ng n) [ clause [] (normalB 
+          [| (\(a,b) -> (a, T.fromPT b)) . $(varE $ mkName $ runElemI ng n) |]) []]
+
+    , -- runElemT 
+     let [f] = map mkName ["f"]
+     in funD (mkName $ runElemTI ng n) [ clause [conP 'VXMLT [varP f]] (normalB 
+           [| do
+                  (a,p) <- $(varE f) id
+                  return (a, p (T.PT $(sigUnd elst) (createEl $(sigUnd $ conT elDataName))))
+          |]) []]
+{-
+VXML
+||                                     (NYV (Element Root_T (AS HNil HNil) State1 HFalse))
+||                                     t1
+||                                     (NYV (Element Root_T (AS HNil HNil) State1 HFalse))
+||                                     t1
+||                                     st1
+||                                     el1
+||                                     t
+||                                   -> (t, el)'
+-}
+
+    , funD (mkName $ runElemT ng n) [ clause [] (normalB 
+          [| liftM (\(a,b) -> (a, T.fromPT b)) . $(varE $ mkName $ runElemTI ng n) |]) []]
+
+     -- monadic like interface 
+   , -- class 
+   {-
+    class A_C m elc stc3 elc3  st2 el2 st3 el3 
+          | st2 stc3 -> st3, el2 elc3 -> el3 where
+      aC :: m AA  elc  AA elc  stc3 elc3 a
+          -> m st el  st2 el2  st3 el3 a
+    -}
+    let [ m, elc, stc3, elc3, el2, st2, el3, st3, a, el, st] = map mkName  ["m", "elc", "stc3", "elc3", "el2", "st2", "el3", "st3", "a", "el", "st"]
+    in classD (cxt [])
+              (classElem') 
+              [ m, elc, stc3, elc3, st2, el2, st3, el3 ]
+              [{-funDep [st2,stc3] [st3],-}FunDep [el2,elc3] [el3]] 
+              [sigD elemName' 
+                    (forallT [a, st, el]
+                             (cxt [])
+                             ( appTn arrowT 
+                               [ appTn (varT m) [ elst, varT elc, elst, varT elc, varT stc3, varT elc3, varT a]
+                               , appTn (varT m) (map varT [st, el, st2, el2, st3, el3, a]) ]))
+                             ]
+   , -- instance VXML 
+   {-
+   instance ( AddElT st2 el2 st3 el3 stc3 elc3
+          , CreateEl A_T elc
+          -- , EndAttrsEndElement Root_T el2 el
+          ) => A_C VXML elc  stc3 elc3  st2 el2 st3 el3 where
+    aC f = let (a, child) = runA' f
+           in VXML $ \p -> (a, (`addElT` child) . p)
+    -}
+   let [ st2, el2, st3, el3, stc3, elc3,  elc, f ] = map mkName [ "st2", "el2", "st3", "el3", "stc3", "elc3", "elc", "f"] 
+   in instanceD  (cxt [ appTn (conT ''T.AddElT) [ varT st2, varT el2, varT st3, varT el3, varT stc3, varT elc3 ]
+                     , appTn (conT ''T.CreateEl) [ conT elDataName, varT elc]
+                     ])
+                 (appTn (conT classElem') (conT ''VXML : map varT [elc, stc3, elc3, st2, el2, st3, el3]))
+                 [ funD elemName' [ clause [varP f] (normalB 
+                 [| let (a, child) = $(varE runElemI') $(varE f)
+                    in T.VXML $ \p -> (a, (`T.addElT` child) . p)
+                 |]) []] ]
+   , -- instance VXMLT
+   {-
+     instance ( Monad m
+            , AddElT st2 el2 st3 el3 stc3 elc3
+            , CreateEl A_T elc
+            , EndAttrsEndElement Root_T el2 el
+            ) => A_C (VXMLT m) elc  stc3 elc3  st2 el2 st3 el3 where
+      aC f = VXMLT $ \p -> do
+             (a, child) <- runAT' f
+             return (a, (`addElT` child) . p)
+   -}
+   let [ st2, el2, st3, el3, stc3, elc3,  elc, f, m ] = map mkName [ "st2", "el2", "st3", "el3", "stc3", "elc3", "elc", "f", "m"] 
+   in instanceD  (cxt [ appT (conT ''Monad) (varT m)
+                     , appTn (conT ''T.AddElT) [ varT st2, varT el2, varT st3, varT el3, varT stc3, varT elc3 ]
+                     , appTn (conT ''T.CreateEl) [ conT elDataName, varT elc]
+                     ])
+                 (appTn (conT classElem') (appT (conT ''VXMLT) (varT m) : map varT [elc, stc3, elc3, st2, el2, st3, el3]))
+                 [ funD elemName' [ clause [varP f] (normalB 
+                 [| T.VXMLT $ \p -> do
+                             (a, child) <- $(varE runElemIT') $(varE f)
+                             return (a, (`T.addElT` child) . p)
+                 |]) []] ]
+   ] ++ ( -- AttrOk instances
           [ instanceD (cxt ([])) (appTn (conT ''AttrOk)
                                         [ conT elDataName
                                         , conT $ mkName $ (dataAttrName ng) name ] ) []
@@ -411,11 +490,23 @@ data NameGenerator = NameGenerator {
     dataElName :: String -> String
   , dataAttrName :: String -> String
 
-  -- user interface
-  , uiElName :: String -> String   -- the function to create an element
-  , uiElNameContent :: String -> String -- (el id) or div (onclick_A "foo" . onkeypress_A "bar" . addParagraph )
-  , uiAddAttr :: String -> String -- the function adding an attribute  el `onclick_A` "text"
-  , uiAddAttrFlip :: String -> String
+  -- old interface  (still used by tests)
+  , uiElName :: String -> String
+  , uiAddAttr :: String -> String
+
+  -- monadic like interface 
+  , classElem :: String -> String
+  , classAttr :: String -> String
+  , elemName :: String -> String
+  , elemAttr :: String -> String
+  , runElemI :: String -> String -- internal version of runElem 
+  , runElem :: String -> String --  (\(a,b) -> (a, fromPT b)) . runElemI
+  , execElem :: String -> String
+  , evalElem :: String -> String
+  , runElemTI :: String -> String
+  , runElemT :: String -> String
+  , execElemT :: String -> String
+  , evalElemT :: String -> String
   }
 
 -- used by test cases, default is intelligentNameGenerator
@@ -424,24 +515,35 @@ simpleNameGenerator _ _ = NameGenerator {
     dataElName = (++ "_T") . fstUpper
   , dataAttrName = (++ "_A") . fstUpper
 
-  -- user interface
-  , uiElName = fstLower
-  , uiElNameContent = (++ "C") . fstLower
-  , uiAddAttr = (++ "_A") . fstLower
-  , uiAddAttrFlip = (++ "_AF") . fstLower
+  -- old interface  (still used by tests)
+  , uiElName = (++ "_TT")
+  , uiAddAttr = (++ "_AA")
+
+  -- monadic like interface  
+  , classElem = ( ++ "_C") . fstUpper
+  , classAttr = ( ++ "_CA") . fstUpper
+  , elemName = fstLower  -- monadic element name of class classElem 
+  , elemAttr = (++ "A") . fstLower -- append _A to never conflict with elem 
+  , runElem = ("run" ++) . fstUpper
+  , runElemI = (\s -> "run" ++ s ++ "'") . fstUpper
+  , execElem = ("exec" ++) . fstUpper
+  , evalElem = ("eval" ++) . fstUpper
+  , runElemT = (\s -> "run" ++ s ++ "T" ) . fstUpper
+  , runElemTI = (\s -> "run" ++ s ++ "T'" ) . fstUpper
+  , execElemT = (\s -> "exec" ++ s ++ "T" ) . fstUpper
+  , evalElemT = (\s -> "eval" ++ s ++ "T" ) . fstUpper
 }
 
+-- same as simpleNameGenerator but it only adds A to the attribute name if
+-- there is an element having the same name
 intelligentNameGenerator :: [ String ] -> [ String ] -> NameGenerator
 intelligentNameGenerator els attrs =
   (simpleNameGenerator undefined undefined) {
-      uiElName = fstLower
-    , uiElNameContent = (++ "C") . fstLower
-    , uiAddAttr = (++ "_A") . fstLower
-      -- if there is an element with the same name append an A
-    , uiAddAttrFlip = let an :: String -> String
-                          an n = if n `elem` els then n ++ "A" else n
-                          map' = M.fromList $ map (\n -> (n, an n)) attrs
-                      in  fromJust .(flip M.lookup) map'
+      elemName = fstLower
+    , elemAttr = let an :: String -> String
+                     an n = if n `elem` els then n ++ "A" else n
+                     map' = M.fromList $ map (\n -> (n, an n)) attrs
+                 in  fromJust .(flip M.lookup) map'
   }
 
 dtdToTypes :: Maybe ([String] {- el names -} -> [String] {- attr names -} -> NameGenerator)
@@ -459,40 +561,61 @@ dtdToTypes mbNG file (XmlIds pub sys) = do
 
       in (flip evalStateT) (initialDataState { nameGen = ng } ) $ do
         -- shared attribute names and instances
-        attrDecs <- liftM concat $ mapM (\ n ->
-                      do let name = (dataAttrName ng) n
-                             nameN = mkName name
-                             uiName = (uiAddAttr ng) n
-                             uiNameFlip = (uiAddAttrFlip ng) n
-                         ST.lift $ do
-                           d <- dataD (cxt []) nameN [] [] []
-                           s <- instanceShow nameN n
-                           add <- let [el,val] = map mkName ["el", "val"]
-                                  in  funD (mkName uiName)
-                                        [ clause [ varP el, varP val ]
-                                            (normalB $ appEn (varE 'addAttrT)
-                                                              [ varE el
-                                                              , sigE (varE 'undefined) (conT $ nameN)
-                                                              , varE val ]
-                                            ) [] ]
-                           -- why do I need the type decl?
-                           addFlipDecl <-
-                             let [text, st, st2, el] = map mkName [ "text", "st", "st2", "elx"]
-                             in sigD (mkName $ uiNameFlip) $
-                                 forallT [text, st, st2, el]
-                                   (cxt [  --  (AddAttrT Attr_A st st2 el)
-                                          appTn (conT ''T.AddAttrT) ( [ conT (mkName name), varT st, varT st2, varT el] )
-                                        ]) -- PT st el -> attrType -> String -> PT st2 el
-                                           (arrowTn [ varT text
-                                                    , appTn (conT ''PT) [ varT st, varT el]
-                                                    , appTn (conT ''PT) [ varT st2, varT el]
-                                                    ] )
-                           addFlip <- funD (mkName $ uiNameFlip)
-                                        [ clause []
-                                            (normalB $ appE (varE 'flip) (varE $ mkName uiName)
-                                            ) [] ]
+        attrDecs <- 
+          liftM concat $ mapM (\ n ->
+            do let name = (dataAttrName ng) n
+                   nameN = mkName name
+                   cName = mkName $ (classAttr ng) n
+                   uiElName = (uiAddAttr ng) n
+                   elemAttrName = mkName $ (elemAttr ng) n
+               ST.lift $ do
+                 d <- dataD (cxt []) nameN [] [] []
+                 s <- instanceShow nameN n
+                 aClass <- 
 
-                           return [d,s,add,addFlip,addFlipDecl] ) attrNamesUniq
+                          {- class A_CA m st st2 st3 el el2 value 
+                              | st -> st2, st2 -> st3, el -> el2, el2 -> el where
+                              aA :: (
+                                    ) => value -> m  st el  
+                                                     st2 el2
+                                                     st3 el2
+                                                     () -}
+                         let [m, st, st2, st3, el, el2, value] = map mkName ["m", "st", "st2", "st3", "el", "el2", "value"]
+                         in classD (cxt []) cName [m, st, st2, st3, el, el2, value]
+                                   [{-funDep [st] [st2] ,funDep [st2] [st3] -} funDep [el] [el2] ,funDep [el2] [el] ]
+                                   [sigD elemAttrName
+                                      (forallT []
+                                               (cxt [])
+                                               ( appTn arrowT 
+                                                 [ varT value
+                                                 , appTn (varT m) ((map varT [st, el, st2, el2, st3, el2]) ++ [conT ''()])
+                                                 ] ) ) ]
+
+                 icVVXML <- 
+                        {-  instance ( AddAttrT AAttr_A value st2 st3 el2
+                                    ) => A_CA VXML st st2 st3 el el2 value where
+                              aA v = VXML $ \p -> ((), (\el -> addAttrT el (undefined :: AAttr_A)  v) . p) -}
+                         let [value, st2, st3, el2, v, st, el] = map mkName ["value", "st2", "st3", "el2","v", "st", "el"]
+                         in instanceD  (cxt [ appTn (conT ''T.AddAttrT) [conT nameN, varT value, varT st2, varT st3, varT el2] ])
+                                       (appTn (conT cName) (conT ''VXML : map varT [st, st2, st3, el, el2, value]))
+                                       [ funD elemAttrName [ clause [varP v] (normalB 
+                                       [| VXML $ \p -> ((), (\el -> addAttrT el $(undType $ conT nameN)  $(varE v)) . p)
+                                       |]) []] ]
+
+                 icVXMLT <- 
+                        {-  instance ( Monad m'
+                                  , AddAttrT AAttr_A value st2 st3 el2
+                                  ) => A_CA (VXMLT m') st st2 st3 el el2 value where
+                            aA v = VXMLT $ \p -> return ((), (\el -> addAttrT el (undefined :: AAttr_A) v) . p) -}
+
+                         let [value, st2, st3, el2, el3, v, el, st, m] = map mkName ["value", "st2", "st3", "el2","el3", "v", "el", "st", "m"]
+                         in instanceD  (cxt [ appTn (conT ''T.AddAttrT) [conT nameN, varT value, varT st2, varT st3, varT el3] 
+                                            , appT (conT ''Monad) (varT m)])
+                                       (appTn (conT cName) ((appT (conT ''VXMLT) (varT m)) : map varT [st, st2, st3, el, el3, value]))
+                                       [ funD elemAttrName [ clause [varP v] (normalB 
+                                       [| VXMLT $ \p -> return ((), (\el -> addAttrT el $(undType $ conT nameN) $(varE v)) . p)
+                                       |]) []] ]
+                 return [d,s, aClass, icVVXML, icVXMLT] ) attrNamesUniq
 
         -- | elements and attribute data belonging to it
         types <- liftM concat $ mapM toCode zipped
