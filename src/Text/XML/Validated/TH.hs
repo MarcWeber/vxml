@@ -41,8 +41,7 @@ instance Show ChildEl where
 type ESpecOrTrans = Either ChildSpec (Int, NextState)
 data ChildSpec = Child ChildEl
                | Seq [ ESpecOrTrans ]
-               | Choice (Maybe Int) -- use this state transformation id (used for loopbacks in () * )
-                        [ ESpecOrTrans ] -- Right is only used from Star
+               | Choice [ ESpecOrTrans ] -- Right is only used from Star
                | Star ChildSpec
                | Query ChildSpec
                | Plus ChildSpec
@@ -62,15 +61,15 @@ instance Show StateList where
 
 data NextState = NextState {
                    endable ::  Bool -- Bool = true means element can end here
-                 , msg :: String -- error message on no match
                  , elmap ::  M.Map ChildEl -- given this child to add reduce to the following state
                                  TrState -- this state id (Nothing = consumed)
                  }
             deriving ( Eq, Ord)
+endable' a b = trace a (endable b)
+elmap' a b = trace a (elmap b)
 instance Show NextState where
-  show (NextState endable msg elmap) = unlines $ map ("  " ++ )
+  show (NextState endable elmap) = unlines $ map ("  " ++ )
     [ "endable : " ++ (show endable)
-    , "msg : " ++ msg
     ] ++ [  "  " ++ (show child) ++ " -> " ++ show trS
          | (child, trS) <- M.toList elmap ]
 data TrState =  C
@@ -105,7 +104,8 @@ contentToState :: Bool  -- may the element be closed without adding further elem
             -- a| b -> entry point to (b,c)*, starting at 2 continuing at 1 or at the passed continuation
 contentToState e mbCont (Child c) = do
     let cont = maybe C (\(i, _) -> St i) mbCont
-    findOrAdd' $ NextState e (show c) (M.singleton c cont)
+
+    findOrAdd' $ NextState e (M.singleton c cont)
 contentToState _ _ (Seq []) = error "empty seq"
 contentToState e Nothing (Seq [Left c]) = contentToState e Nothing c
 contentToState e Nothing (Seq [Right c]) = return c
@@ -115,40 +115,41 @@ contentToState e mbCont (Seq ((Right _):_)) = error "Right should have been the 
 contentToState e mbCont (Seq ((Left x):xs@(_:_))) = do
     cont <- contentToState False mbCont $ Seq xs
     contentToState e (Just cont) x
-contentToState e mbCont (Choice mbUseId list) = noDup $ do
+contentToState e mbCont (Choice list) = noDup $ do
     list' <- mapM (toTransform e mbCont) list
-    let maps = map (elmap . snd) list'
-    let e' = any id $ map (endable . snd) list'
+    let maps = map (elmap' "a" . snd) list'
+    let e' = any id $ map (endable' "b" . snd) list'
     when (not . M.null . foldr M.intersection M.empty $ maps) $ do
       error "non deterministic choice ? check your dtd with xmllint"
     let union = foldr M.union M.empty $ maps
-    let msg' = case map (msg . snd) list' of
-                  [x] -> x
-                  xs -> "one of " ++ intercalate "," xs
-    let ns = NextState (e' || e) msg' union
-    maybe (findOrAdd' ns)
-          (\id -> modify (\s -> s { stateReduction  = M.insert ns (id, ns) (stateReduction s) }) -- (1) Just is only passed from here
-                  >> return (id, ns)
-          )
-          mbUseId
+    let ns = NextState (e' || e) union
+    findOrAdd' ns
   where toTransform _ mbCont (Right x) = return x
         toTransform e mbCont (Left c) = contentToState e mbCont c
 contentToState e (Just cont) (Query chd ) =
-    contentToState e Nothing $ Choice Nothing [ Right cont, Left (Seq [ Left chd, Right cont {- (3) -}]) ]
+    contentToState e Nothing $ Choice [ Right cont, Left (Seq [ Left chd, Right cont {- (3) -}]) ]
 contentToState e Nothing (Query chd ) =
     contentToState True Nothing chd
 contentToState e mbCont (Star chd) = noDup $ do
-  -- TODO look for existing entries
+  let contElmap = ( maybe (M.empty) (elmap . snd) mbCont)
+
+  -- building NextState to be passed as continuation
   (StateList nId sr) <- get -- new id to be passed as continuation
   put $ StateList (nId + 1) sr
-  let zeroTimesMatch =
-        case mbCont of
-          Nothing -> []
-          Just c -> [ Right c ]
-
-  chd' <- contentToState e (Just (nId, NextState (error "X") "one or more of something" (error "X") ) {- loop back -} ) chd
-  contentToState (e || isNothing mbCont) Nothing $ Choice (Just nId) {- (1) -} $
-      (Right chd' {- one or more -}) : zeroTimesMatch
+  let e' = e || isNothing mbCont
+  chdWithoutCont <- contentToState e' Nothing chd
+    -- nsCont to be passed to real nsCont, breaking loop 
+  let nsCont = (nId, NextState e'$ M.union
+                        (M.map (const $ St nId) ((elmap . snd) chdWithoutCont)) -- loop back to this id 
+                        contElmap -- or continue with mbCont
+               )
+  chdWithCont <- contentToState e' (Just nsCont) chd
+  let ns = NextState e' (M.union
+              ((elmap . snd) chdWithoutCont)
+              contElmap 
+            )
+  modify $ \s -> s { stateReduction  = M.insert ns (nId, ns) (stateReduction s) } -- (1) Just is only passed from here
+  return (nId, ns)
 contentToState e mbCont (Plus a) = contentToState e mbCont $ Seq [ Left a, Left (Star a) ]
 
 stateName' ::  Int -> String
@@ -178,8 +179,8 @@ noDup f = do
             -> Int -> Int -> Bool
         isDup _ _ _ a b | a == b = True
         isDup sl vis map id1 id2
-          | (Just (NextState e1 _ m1)) <- M.lookup id1 sl -- if noDup is called while building Star path the loopback id is not yet present
-          , (Just (NextState e2 _ m2)) <- M.lookup id2 sl -- in this case there might be a Nothing, duplication will be removed later than
+          | (Just (NextState e1 m1)) <- M.lookup id1 sl -- if noDup is called while building Star path the loopback id is not yet present
+          , (Just (NextState e2 m2)) <- M.lookup id2 sl -- in this case there might be a Nothing, duplication will be removed later than
               = let compare (C, C) = True
                     compare (St id1, St id2) =
                       let seen = id1 `S.member` vis
@@ -241,14 +242,14 @@ elementState n H.EMPTY = return $ (conT ''T.EMPTY, [])
 elementState n H.ANY = return $ (conT ''T.ANY, [])
 elementState n (H.Mixed H.PCDATA) = return $ (conT ''T.PCDATA, [])
 elementState n (H.Mixed (H.PCDATAplus list)) =
-    realise n $ contentToState False Nothing $ Star $ Choice Nothing $
+    realise n $ contentToState False Nothing $ Star $ Choice $
         Left (Child PCDATA) : map (Left . Child . T) list
 elementState n (H.ContentSpec spec) =
     realise n $ contentToStateE $ sp spec
 sp :: H.CP -> ChildSpec
 sp (H.TagName n mod)     = addMod mod $ Child $ T n
 sp (H.Choice [item] mod) = addMod mod $ sp item
-sp (H.Choice list mod)   = addMod mod $ Choice Nothing $ map (Left . sp) list
+sp (H.Choice list mod)   = addMod mod $ Choice $ map (Left . sp) list
 sp (H.Seq [] mod)    = error "empty seq list passed from HaXmL ?" -- should not happen
 sp (H.Seq [item] mod)    = addMod mod $ sp item
 sp (H.Seq list@(_:_) mod)= addMod mod $ Seq $ map (Left . sp) list
@@ -278,7 +279,7 @@ realise n stF = do
     return $ ( conT $ stateName id
              , concatMap (\id -> realiseST ng id . fromJust . M.lookup id $ stListRev) (S.elems new))
   where
-        realiseST ng id (NextState endable msg elmap) =
+        realiseST ng id (NextState endable elmap) =
           let n = stateName id
               instances = let el PCDATA = conT ''T.PCDATA
                               el (T s) = appT (conT ''T.Elem) (conT $ mkName $ (dataElName ng) s)
@@ -296,7 +297,7 @@ realise n stF = do
 
         usedSTS :: S.Set Int -> M.Map Int NextState -> Int -> [Int]
         usedSTS visited map id =
-          let (NextState _ _ elmap) = (fromJust . M.lookup id) map
+          let (NextState _ elmap) = (fromJust . M.lookup id) map
           in id : ( [ id  | St id <- M.elems elmap, not $ S.member id visited  ] >>= usedSTS (S.insert id visited) map )
 
 
@@ -631,13 +632,7 @@ dtdToTypes mbNG file (XmlIds pub sys) = do
 
         let all = attrDecs ++ types ++ docClass
         gs <- ST.get
-        let text = unlines $    -- error hints
-                                (  let map = (M.fromList . M.elems . stateReduction . stateList ) gs
-                                   in [ "err msg " ++ (stateName' i) ++ ": "
-                                        ++ (msg . fromJust $ M.lookup i map)
-                                      | i <- S.elems (realised gs) ]
-                                )
-                             ++ ( if showGeneratedCode then
+        let text = unlines $    ( if showGeneratedCode then
                                       ("-- ============= generated code based on " ++ file)
                                        : map pprint all
                                        ++ [ "-- ============ generated code end =====================================" ]
