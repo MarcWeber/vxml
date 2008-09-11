@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -fcontext-stack=100 #-}
-{-# LANGUAGE NoMonomorphismRestriction,  PatternSignatures, ScopedTypeVariables, EmptyDataDecls,
+{-# LANGUAGE NoMonomorphismRestriction,  ScopedTypeVariables, EmptyDataDecls,
     FunctionalDependencies, FlexibleInstances, FlexibleContexts,
     MultiParamTypeClasses, UndecidableInstances #-}
 

@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeSynonymInstances, PatternSignatures, ScopedTypeVariables, EmptyDataDecls,
+{-# LANGUAGE TypeSynonymInstances, ScopedTypeVariables, EmptyDataDecls,
     FunctionalDependencies, FlexibleInstances, FlexibleContexts,
     MultiParamTypeClasses, UndecidableInstances #-}
 module Text.XML.Validated.Instance.String where

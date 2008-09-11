@@ -1,4 +1,4 @@
-{-# LANGUAGE PatternGuards,  PatternSignatures,  StandaloneDeriving,  MultiParamTypeClasses, TemplateHaskell #-}
+{-# LANGUAGE PatternGuards,  ScopedTypeVariables,  StandaloneDeriving,  MultiParamTypeClasses, TemplateHaskell #-}
 module Text.XML.Validated.TH (
   dtdToTypes
   -- exported for XmlToQ.hs
