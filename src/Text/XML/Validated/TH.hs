@@ -432,6 +432,8 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
     aC f = let (a, child) = runA' f
            in VXML $ \p -> (a, (`addElT` child) . p)
     -}
+
+
    let [ st2, el2, st3, el3, stc3, elc3,  elc, f ] = map mkName [ "st2", "el2", "st3", "el3", "stc3", "elc3", "elc", "f"] 
    in instanceD  (cxt [ appTn (conT ''T.AddElT) [ varT st2, varT el2, varT stc3, varT elc3, varT st3, varT el3 ]
                      , appTn (conT ''T.CreateEl) [ conT elDataName, varT elc]
@@ -439,7 +441,7 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
                  (appTn (conT classElem') (conT ''VXML : map varT [elc, stc3, elc3, st2, el2, st3, el3]))
                  [ funD elemName' [ clause [varP f] (normalB 
                  [| let (a, child) = $(varE runElemI') $(varE f)
-                    in T.VXML $ \p -> (a, (`T.addElT` child) . p)
+                    in T.VXML $ \p -> (a, (\b -> T.addElT b child) . p)
                  |]) []] ]
    , -- instance VXMLT
    {-
@@ -461,7 +463,7 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
                  [ funD elemName' [ clause [varP f] (normalB 
                  [| T.VXMLT $ \p -> do
                              (a, child) <- $(varE runElemIT') $(varE f)
-                             return (a, (`T.addElT` child) . p)
+                             return (a, (\b -> T.addElT b child) . p)
                  |]) []] ]
    ] ++ ( -- AttrOk instances
           [ instanceD (cxt ([])) (appTn (conT ''AttrOk)
@@ -604,7 +606,7 @@ dtdToTypes mbNG file (XmlIds pub sys) = do
                                        [ funD elemAttrName [ clause [varP v] (normalB 
                                        [| VXMLT $ \p -> return ((), (\el -> addAttrT el $(undType $ conT nameN) $(varE v)) . p)
                                        |]) []] ]
-                 return [d,s, aClass, icVVXML, icVXMLT] ) attrNamesUniq
+                 return [d,s] ) attrNamesUniq
 
         -- | elements and attribute data belonging to it
         types <- liftM concat $ mapM toCode zipped
