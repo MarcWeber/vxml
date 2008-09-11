@@ -1,4 +1,9 @@
-{-# LANGUAGE PatternGuards,  ScopedTypeVariables,  StandaloneDeriving,  MultiParamTypeClasses, TemplateHaskell #-}
+{-# LANGUAGE ScopedTypeVariables,  PatternGuards, StandaloneDeriving,  MultiParamTypeClasses, TemplateHaskell #-}
+#if (__GLASGOW_HASKELL__ > 608)
+  {-# LANGUAGE ScopedTypeVariables #-}
+#else
+  {-# LANGUAGE PatternSignatures #-}
+#endif
 module Text.XML.Validated.TH (
   dtdToTypes
   -- exported for XmlToQ.hs
@@ -31,6 +36,9 @@ showGeneratedCode = True -- if you are curious enable this to see the code beein
 debugStateCount = True
 debugStates = True -- enable this to have a look at the state reduction instances
 mytrace _ a = a
+
+fromJust' _ (Just x) = x
+fromJust' s Nothing = error s
 
 -- ========== state transformations for instances ====================
 data ChildEl = PCDATA | T String
@@ -115,19 +123,8 @@ contentToState e mbCont (Seq ((Right _):_)) = error "Right should have been the 
 contentToState e mbCont (Seq ((Left x):xs@(_:_))) = do
     cont <- contentToState False mbCont $ Seq xs
     contentToState e (Just cont) x
-contentToState e mbCont (Choice list) = noDup $ do
-    list' <- mapM (toTransform e mbCont) list
-    let maps = map (elmap' "a" . snd) list'
-    let e' = any id $ map (endable' "b" . snd) list'
-    when (not . M.null . foldr M.intersection M.empty $ maps) $ do
-      error "non deterministic choice ? check your dtd with xmllint"
-    let union = foldr M.union M.empty $ maps
-    let ns = NextState (e' || e) union
-    findOrAdd' ns
-  where toTransform _ mbCont (Right x) = return x
-        toTransform e mbCont (Left c) = contentToState e mbCont c
-contentToState e (Just cont) (Query chd ) =
-    contentToState e Nothing $ Choice [ Right cont, Left (Seq [ Left chd, Right cont {- (3) -}]) ]
+contentToState e mbCont (Choice list) =  error "aehm"
+contentToState e (Just cont) (Query chd ) = error "aehm2"
 contentToState e Nothing (Query chd ) =
     contentToState True Nothing chd
 contentToState e mbCont (Star chd) = noDup $ do
@@ -136,20 +133,34 @@ contentToState e mbCont (Star chd) = noDup $ do
   -- building NextState to be passed as continuation
   (StateList nId sr) <- get -- new id to be passed as continuation
   put $ StateList (nId + 1) sr
-  let e' = e || isNothing mbCont
+  let e' = trace ("nId " ++(show nId)) $  e || isNothing mbCont
   chdWithoutCont <- contentToState e' Nothing chd
     -- nsCont to be passed to real nsCont, breaking loop 
-  let nsCont = (nId, NextState e'$ M.union
-                        (M.map (const $ St nId) ((elmap . snd) chdWithoutCont)) -- loop back to this id 
-                        contElmap -- or continue with mbCont
-               )
-  chdWithCont <- contentToState e' (Just nsCont) chd
-  let ns = NextState e' (M.union
-              ((elmap . snd) chdWithoutCont)
+  c <- get
+  let nsCont = trace ("without cond of " ++ (show nId) ++ (show c) ++ "end") $
+                        (nId, NextState e'$ M.union
+                                (M.map (const $ St nId) ((elmap . snd) chdWithoutCont)) -- loop back to this id 
+                                contElmap -- or continue with mbCont
+                       )
+  chdWithCont <- contentToState False (Just nsCont) chd
+  let ns = trace ("throwing awayy current :" ++(show nId) ++" , " ++ (show $ fst chdWithCont) ++ " list :" ++ (show c) ++ "<x<") $ NextState e' (M.union
+              ((elmap . snd) chdWithCont)
               contElmap 
             )
-  modify $ \s -> s { stateReduction  = M.insert ns (nId, ns) (stateReduction s) } -- (1) Just is only passed from here
-  return (nId, ns)
+  (StateList _ sr2) <- get
+  case M.lookup ns sr2 of
+    Just r@(iFound,n)  -> trace ("ALREADY PRESETN " ++ "replacing " ++   (show nId) ++ "," ++ (show ns) ++ " by " ++ (show iFound) ++ "," ++ (show n)) $ do 
+                        -- oh? already present, then it can be reused. The id (loop) reference must be replaced by the found one
+                        let mapTr C = C
+                            mapTr (St i'') = if i'' == nId then St iFound else St i''
+                            f ((NextState e elmap) ,(i,_)) = let ns' = NextState e (M.map mapTr elmap)
+                                                             in (ns',(i,ns'))
+                        modify (\s -> s { stateReduction = M.fromList . map f . M.toList $ stateReduction s } )
+                        return r 
+    Nothing -> do
+      modify $ trace ("adding " ++(show nId)) $ \s -> s { stateReduction  = insert' (show nId) ns (nId, ns) (trace ("inserting into " ++(show s)) (stateReduction s)) } -- (1) Just is only passed from here
+      t <- get
+      return $ trace ("dana " ++(show nId) ++"  >> \n" ++(show t) ++ "\n  <<<<<<<<end") (nId, ns)
 contentToState e mbCont (Plus a) = contentToState e mbCont $ Seq [ Left a, Left (Star a) ]
 
 stateName' ::  Int -> String
@@ -157,6 +168,8 @@ stateName' i = "State" ++ (show i)
 stateName :: Int -> Name
 stateName = mkName . stateName'
 
+insert' s k v map = if k `M.member` map then error $ "xx " ++ s
+                  else M.insert k v map
 -- Have a look at the returned id, if an equivalent state transformation path is already present return that instead
 
 noDup :: ST.State StateList (Int, NextState) -> ST.State StateList (Int, NextState)
@@ -167,12 +180,12 @@ noDup f = do
     case findDuplicate sl' id ( (map fst . M.elems . stateReduction) backup) of
       Nothing -> return r
       Just d -> do
-        put backup
+        put ( trace ("found " ++ (show d) ++ " for " ++ (show id))  backup )
         return $ d
   where findDuplicate (StateList _ map) id ids =
           let m = (M.fromList . M.elems) map -- to Map id NextState
           in  (listToMaybe . filter (isDup m S.empty M.empty id) $ ids)
-               >>=  \i -> Just (i, fromJust $ M.lookup i m) -- add NextState
+               >>=  \i -> Just (i, (fromJust' "a") $ M.lookup i m) -- add NextState
         isDup :: M.Map Int NextState
             -> S.Set Int  -- visited ids of first path
             -> M.Map Int Int -- mapping from id of the first path to corresponding ids of the snd
@@ -277,7 +290,7 @@ realise n stF = do
       hPutStrLn stdout $ n ++ " states: " ++ (show $ S.size sts) ++ " new : " ++ (show $ S.size new)
       hFlush stdout
     return $ ( conT $ stateName id
-             , concatMap (\id -> realiseST ng id . fromJust . M.lookup id $ stListRev) (S.elems new))
+             , concatMap (\id -> realiseST ng id . (fromJust' "b") . M.lookup id $ stListRev) (S.elems new))
   where
         realiseST ng id (NextState endable elmap) =
           let n = stateName id
@@ -297,7 +310,10 @@ realise n stF = do
 
         usedSTS :: S.Set Int -> M.Map Int NextState -> Int -> [Int]
         usedSTS visited map id =
-          let (NextState _ elmap) = (fromJust . M.lookup id) map
+          let (NextState _ elmap) = case M.lookup id map of
+                                    Just x -> x
+                                    Nothing -> error (show id ++ " +++ " ++ show map)
+          -- let (NextState _ elmap) = ((fromJust' ("c" ++  (show id))) . M.lookup id) map
           in id : ( [ id  | St id <- M.elems elmap, not $ S.member id visited  ] >>= usedSTS (S.insert id visited) map )
 
 
@@ -525,16 +541,19 @@ simpleNameGenerator _ _ = NameGenerator {
   , evalElemT = (\s -> "eval" ++ s ++ "T" ) . fstUpper
 }
 
+noKeyWords s = fromMaybe s $ M.lookup s map
+  where map = M.fromList [("type", "typE")]
+
 -- same as simpleNameGenerator but it only adds A to the attribute name if
 -- there is an element having the same name
 intelligentNameGenerator :: [ String ] -> [ String ] -> NameGenerator
 intelligentNameGenerator els attrs =
   (simpleNameGenerator undefined undefined) {
-      elemName = fstLower
+      elemName = noKeyWords . fstLower
     , elemAttr = let an :: String -> String
                      an n = if n `elem` els then n ++ "A" else n
                      map' = M.fromList $ map (\n -> (n, an n)) attrs
-                 in  fromJust .(flip M.lookup) map'
+                 in  (fromJust' "d") .(flip M.lookup) map'
   }
 
 dtdToTypes :: Maybe ([String] {- el names -} -> [String] {- attr names -} -> NameGenerator)
@@ -557,23 +576,39 @@ dtdToTypes mbNG file (XmlIds pub sys) = do
             do let name = (dataAttrName ng) n
                    nameN = mkName name
                    cName = mkName $ (classAttr ng) n
-                   uiElName = (uiAddAttr ng) n
+                   uiName = (uiAddAttr ng) n
                    elemAttrName = mkName $ (elemAttr ng) n
                ST.lift $ do
                  d <- dataD (cxt []) nameN [] [] []
                  s <- instanceShow nameN n
+                 add <- let [el,val] = map mkName ["el", "val"]
+                        in  funD (mkName uiName)
+                             [ clause [ varP el, varP val ]
+                                (normalB $ appEn (varE 'addAttrT)
+                                                  [ varE el
+                                                  , sigE (varE 'undefined) (conT $ nameN)
+                                                  , varE val ]
+                                ) [] ]
                  aClass <- 
 
-                          {- class A_CA m st st2 st3 el el2 value 
-                              | st -> st2, st2 -> st3, el -> el2, el2 -> el where
+                          {- class A_CA m st el st2 el2  st3 el3 value 
+                              | st -> st2, st2 -> st3
+                              , st st2 el2 -> el
+                              , st st3 el3 -> el
+                              --, st2 st3 el3 -> el2
+                              where
                               aA :: (
                                     ) => value -> m  st el  
                                                      st2 el2
-                                                     st3 el2
+                                                     st3 el3
                                                      () -}
-                         let [m, st, st2, st3, el, el2, value] = map mkName ["m", "st", "st2", "st3", "el", "el2", "value"]
-                         in classD (cxt []) cName [m, st, st2, st3, el, el2, value]
-                                   [{-funDep [st] [st2] ,funDep [st2] [st3] -} funDep [el] [el2] ,funDep [el2] [el] ]
+                         let [m, st, st2, st3, el, el2, el3, value] = map mkName ["m", "st", "st2", "st3", "el", "el2", "el3", "value"]
+                         in classD (cxt []) cName [m, st, el, st2, el2, st3, el3, value]
+                                   [ funDep [st] [st2] , funDep [st2] [st3] 
+                                   , funDep [st,st2,el2] [el] 
+                                   , funDep [st,st3,el3] [el] 
+                                   -- , funDep [st2,st3,el3] [el2] 
+                                   ]
                                    [sigD elemAttrName
                                       (forallT []
                                                (cxt [])
@@ -583,30 +618,30 @@ dtdToTypes mbNG file (XmlIds pub sys) = do
                                                  ] ) ) ]
 
                  icVVXML <- 
-                        {-  instance ( AddAttrT AAttr_A value st2 st3 el2
-                                    ) => A_CA VXML st st2 st3 el el2 value where
+                        {-  instance ( AddAttrT AAttr_A value st2 el2 st3 el3
+                                    ) => A_CA VXML st el st2 el2 st3 el3 value where
                               aA v = VXML $ \p -> ((), (\el -> addAttrT el (undefined :: AAttr_A)  v) . p) -}
-                         let [value, st2, st3, el2, v, st, el] = map mkName ["value", "st2", "st3", "el2","v", "st", "el"]
-                         in instanceD  (cxt [ appTn (conT ''T.AddAttrT) [conT nameN, varT value, varT st2, varT st3, varT el2] ])
-                                       (appTn (conT cName) (conT ''VXML : map varT [st, st2, st3, el, el2, value]))
+                         let [value, st, el, st2, el2, st3, el3, v] = map mkName ["value", "st", "el", "st2", "el2", "st3", "el3", "v"]
+                         in instanceD  (cxt [ appTn (conT ''T.AddAttrT) [conT nameN, varT value, varT st2, varT el2, varT st3, varT el2] ]) -- not sure about this el2, should be el3 ? 
+                                       (appTn (conT cName) (conT ''VXML : map varT [st,el, st2, el2, st3, el3, value]))
                                        [ funD elemAttrName [ clause [varP v] (normalB 
                                        [| VXML $ \p -> ((), (\el -> addAttrT el $(undType $ conT nameN)  $(varE v)) . p)
                                        |]) []] ]
 
                  icVXMLT <- 
                         {-  instance ( Monad m'
-                                  , AddAttrT AAttr_A value st2 st3 el2
-                                  ) => A_CA (VXMLT m') st st2 st3 el el2 value where
+                                  , AddAttrT AAttr_A value st2 el2 st3 el3
+                                  ) => A_CA (VXMLT m') st el st2 el2 st3 el3 value where
                             aA v = VXMLT $ \p -> return ((), (\el -> addAttrT el (undefined :: AAttr_A) v) . p) -}
 
-                         let [value, st2, st3, el2, el3, v, el, st, m] = map mkName ["value", "st2", "st3", "el2","el3", "v", "el", "st", "m"]
-                         in instanceD  (cxt [ appTn (conT ''T.AddAttrT) [conT nameN, varT value, varT st2, varT st3, varT el3] 
+                         let [value, st, el, st2, el2, st3, el3, m, v] = map mkName ["value", "st", "el", "st2", "el2", "st3", "el3", "m", "v"]
+                         in instanceD  (cxt [ appTn (conT ''T.AddAttrT) [conT nameN, varT value, varT st2, varT el2, varT st3, varT el2] 
                                             , appT (conT ''Monad) (varT m)])
-                                       (appTn (conT cName) ((appT (conT ''VXMLT) (varT m)) : map varT [st, st2, st3, el, el3, value]))
+                                       (appTn (conT cName) ((appT (conT ''VXMLT) (varT m)) : map varT [st,el, st2, el2, st3, el3, value]))
                                        [ funD elemAttrName [ clause [varP v] (normalB 
                                        [| VXMLT $ \p -> return ((), (\el -> addAttrT el $(undType $ conT nameN) $(varE v)) . p)
                                        |]) []] ]
-                 return [d,s] ) attrNamesUniq
+                 return [d,s,add,aClass,icVVXML,icVXMLT] ) attrNamesUniq
 
         -- | elements and attribute data belonging to it
         types <- liftM concat $ mapM toCode zipped

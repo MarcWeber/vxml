@@ -25,7 +25,6 @@ $( do
       -- using a custom one here only to assure it works
       let ng a b = (simpleNameGenerator a b) {
                 uiAddAttr = (++ "_A") . fstLower
-              , uiAddAttrFlip = (++ "_AF") . fstLower
               , uiElName = (++ "_T") . fstLower
               }
       dtdToTypes (Just ng)
