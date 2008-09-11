@@ -6,12 +6,16 @@ import Data.Char
 import Text.XML.Validated.Types
 import Data.List
 
+-- That's easy, we only have Strings here 
+instance DetermineEl st String st2 String
+instance DetermineElAddEl st String stc String st2 String 
+
 -- most simple string instance, XML is generated on directly
 instance (Show elType) => CreateEl elType String where
   createEl _ = "<" ++ (show (undefined :: elType))
 
 instance (Show attrType
-         ) => AddAttribute String attrType String where 
+         ) => AddAttribute String String attrType String where 
   addAttribute tag _ value = 
       tag ++ " " ++ (show (undefined :: attrType) ) 
       ++ "=\"" ++ (stringToHtmlString value) ++ "\""

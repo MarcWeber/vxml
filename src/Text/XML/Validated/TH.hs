@@ -400,18 +400,6 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
                   (a,p) <- $(varE f) id
                   return (a, p (T.PT $(sigUnd elst) (createEl $(sigUnd $ conT elDataName))))
           |]) []]
-{-
-VXML
-||                                     (NYV (Element Root_T (AS HNil HNil) State1 HFalse))
-||                                     t1
-||                                     (NYV (Element Root_T (AS HNil HNil) State1 HFalse))
-||                                     t1
-||                                     st1
-||                                     el1
-||                                     t
-||                                   -> (t, el)'
--}
-
     , funD (mkName $ runElemT ng n) [ clause [] (normalB 
           [| liftM (\(a,b) -> (a, T.fromPT b)) . $(varE $ mkName $ runElemTI ng n) |]) []]
 
@@ -437,7 +425,7 @@ VXML
                              ]
    , -- instance VXML 
    {-
-   instance ( AddElT st2 el2 st3 el3 stc3 elc3
+   instance ( AddElT st2 el2  stc3 elc3 st3 el3
           , CreateEl A_T elc
           -- , EndAttrsEndElement Root_T el2 el
           ) => A_C VXML elc  stc3 elc3  st2 el2 st3 el3 where
@@ -445,7 +433,7 @@ VXML
            in VXML $ \p -> (a, (`addElT` child) . p)
     -}
    let [ st2, el2, st3, el3, stc3, elc3,  elc, f ] = map mkName [ "st2", "el2", "st3", "el3", "stc3", "elc3", "elc", "f"] 
-   in instanceD  (cxt [ appTn (conT ''T.AddElT) [ varT st2, varT el2, varT st3, varT el3, varT stc3, varT elc3 ]
+   in instanceD  (cxt [ appTn (conT ''T.AddElT) [ varT st2, varT el2, varT stc3, varT elc3, varT st3, varT el3 ]
                      , appTn (conT ''T.CreateEl) [ conT elDataName, varT elc]
                      ])
                  (appTn (conT classElem') (conT ''VXML : map varT [elc, stc3, elc3, st2, el2, st3, el3]))
@@ -456,7 +444,7 @@ VXML
    , -- instance VXMLT
    {-
      instance ( Monad m
-            , AddElT st2 el2 st3 el3 stc3 elc3
+            , AddElT st2 el2 stc3 elc3 st3 el3
             , CreateEl A_T elc
             , EndAttrsEndElement Root_T el2 el
             ) => A_C (VXMLT m) elc  stc3 elc3  st2 el2 st3 el3 where
@@ -466,7 +454,7 @@ VXML
    -}
    let [ st2, el2, st3, el3, stc3, elc3,  elc, f, m ] = map mkName [ "st2", "el2", "st3", "el3", "stc3", "elc3", "elc", "f", "m"] 
    in instanceD  (cxt [ appT (conT ''Monad) (varT m)
-                     , appTn (conT ''T.AddElT) [ varT st2, varT el2, varT st3, varT el3, varT stc3, varT elc3 ]
+                     , appTn (conT ''T.AddElT) [ varT st2, varT el2, varT stc3, varT elc3 , varT st3, varT el3]
                      , appTn (conT ''T.CreateEl) [ conT elDataName, varT elc]
                      ])
                  (appTn (conT classElem') (appT (conT ''VXMLT) (varT m) : map varT [elc, stc3, elc3, st2, el2, st3, el3]))

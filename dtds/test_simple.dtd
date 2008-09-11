@@ -1,4 +1,4 @@
-<!ELEMENT root (a|b)*>
+<!ELEMENT root (y*,z)*>
 
 
 <!ELEMENT a EMPTY>

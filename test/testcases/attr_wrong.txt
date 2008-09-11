@@ -14,13 +14,3 @@ valid:
 <root>
   <tag2 id="7" foo="8"/>
 </root>
-
-valid:
-<root>
-  <tag2 id="7"/>
-</root>
-
-invalid:
-<root>
-  <tag id="7" foo="8"/>
-</root>

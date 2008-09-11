@@ -83,7 +83,9 @@ instance ( Monad m'
         ) => AAttr_CA (VXMLT m') st st2 st3 el el2 value where
   aAttr v = VXMLT $ \p -> return ((), (\el -> addAttrT el (undefined :: AAttr_A) v) . p)
 
+-}
 
+{-
 class BAttr_CA m st st2 st3 el el2 value 
   |  el -> el2, el2 -> el where
   bAttr :: (
@@ -103,6 +105,17 @@ instance ( Monad m'
 
 e = vxmlreturn ()
 main = do
+
+  print $ ( fromPT a_TT :: String)
+  let xx = runRoot $ y $ VXML $ \p -> ("abc", p)
+  print $ (snd xx :: String)
+  
+  
+  y <- runRootT $ vdo 
+          y e
+          lift $ liftM ("my progname is " ++) getProgName
+  print (y :: ( String, String ))
+{-
   let x = runA $ bAttr "b attr value"  `vxmlgtgt` aAttr "a attr value" `vxmlgtgt` ( VXML $ \p -> ("tes", p) )
   let aa = a $ bAttr "aAttr" `vxmlgtgt` (aAttr "bAttr" `vxmlgtgt` (VXML $ \p -> ("t", p)))
   let x = runRoot (  (b e) `vxmlgtgt` aa)
@@ -117,10 +130,7 @@ main = do
   xT <- runRootT (  (b e) `vxmlgtgt` aaT)
   print (xT :: ( String, String ))
 
-  y <- runRootT $ vdo 
-          a e
-          lift $ liftM ("my progname is " ++) getProgName
-  print (y :: ( String, String ))
+-}
   {-
   y2 <- runRootT $ a $ vdo
     aA "a attr value"
