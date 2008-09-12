@@ -1,10 +1,3 @@
-What does already work:
-======================================================================
-ensuring the correct order of sub elements (tags)
-ensuring that only listed attributes can be added
-ensuring that required attributes are added
-
-
 to be done
 ======================================================================
 * optimize for speed 
@@ -12,8 +5,8 @@ to be done
 * add tests http://www.w3.org/XML/Test/
 * support for &..; entitiy refs
 * ...
+* tidy up?
+* test different el types (only String has been tested)
+* replace Show by a different class
 
 docs : http://www.w3.org/TR/xml11/
-
-
-remove msg, tidy that up (simple list is sifficient)
