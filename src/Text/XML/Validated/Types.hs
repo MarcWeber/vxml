@@ -20,9 +20,9 @@ module Text.XML.Validated.Types (
   -- , XmlDocT(..) -- use xml instead
   , xml    -- validate, return result type of root element with doctype
   , fromPT -- validate, return result type of any non root element
-  , text -- flip addTextT
+  -- , text -- flip addTextT
   -- monadic like functions  (see test.hs for a convinient usage with help of cpp)
-  , VXMLMonad(..), VXML(..), VXMLT(..), VXMLReturn(..), vxmllift
+  , VXMLMonad(..), VXML(..), VXMLT(..), VXMLReturn(..), vxmllift, VXMLText(..)
 
   -- implementation for different result types:
   -- see example in Instances
@@ -56,7 +56,7 @@ module Text.XML.Validated.Types (
   , XmlIdsFromRoot(..)
   -- for debugging
   , debugEl
-  , fromPT'
+  , fromPTInternal
 #ifdef DoValidate
   , Consume
 #endif
@@ -120,22 +120,18 @@ import Data.Either
 
 
 -- see also xml
-fromPT = fromPT' . endElT
+fromPT = fromPTInternal . endElT
 
--- fromPT': take result type before final validation (done in endElT), internal
+-- fromPTInternal: take result type before final validation (done in endElT), internal
 -- use only
-fromPT' :: (PT st el) -> el
-fromPT' (PT _ v) = v
+fromPTInternal :: (PT st el) -> el
+fromPTInternal (PT _ v) = v
 
 -- xml is alias for xmlDocT. xmlDocT is the same as fromPT but it also adds the
 -- doc type declaration
 xml = xmlDocT
 (<<) = addElT
 (<<<) = addTextT
-text :: ( AddTextT el el2 text elst elst2
-        , AddText el2 String
-        ) => text -> PT elst el -> PT elst2 el2
-text = flip addTextT
 
 -- ========== monadic interface ======================================
 {- why ? because the do sugar notation is the only one I know about which
@@ -153,7 +149,7 @@ text = flip addTextT
 
 class VXMLMonad m  st el  st2 el2  st3 el3  st4 el4
     | el2 st st2 -> el
-    , st st3 el3 -> el 
+    , st st3 el3 -> el
     , st st3 el3 -> el
     , st st4 el4 -> el
     , st st2 el2 -> el
@@ -205,11 +201,23 @@ vxmllift f = VXMLT $ \p -> do
   a <- f
   return (a, p)
 
+class VXMLText text m st el st2 el2 st3 el3
+      | st2 -> st3
+      , st2 st3 el3 -> el2  where
+      text :: text -> m st el st2 el2 st3 el2 ()
+instance ( AddTextT el2 el2 text st2 st3
+        ) => VXMLText text VXML st el st2 el2 st3 el2 where 
+  text t = VXML $ \p -> ((),(`addTextT` t) . p)
+
+instance ( Monad m
+          , AddTextT el2 el2 text st2 st3
+          ) => VXMLText text (VXMLT m) st el st2 el2 st3 el3 where 
+  text t = VXMLT $ \p -> return ((),(`addTextT` t) . p)
 
 -- ========== classes to generate the result type ====================
 -- mainly targeting kind of String output (see Instances/ * )
 
--- used for AddAttrT 
+-- used for AddAttrT
 class DetermineEl st el st2 el2 | st st2 el2 -> el
 class DetermineElAddEl st el st2 el2 stc elc
 
@@ -242,7 +250,7 @@ class AddEl el elc | el -> elc, elc -> el
   empty-element tag SHOULD be used, and SHOULD only be used, for elements which
   are declared EMPTY
 -}
-class EndAttrsEndElement elType el elFinal 
+class EndAttrsEndElement elType el elFinal
   where
   endAttrsEndElement, endAttrsEndElementDeclaredEmpty :: elType -> el -> elFinal
   endAttrsEndElementDeclaredEmpty _ = endAttrsEndElement (undefined :: elType)
@@ -264,7 +272,7 @@ class XmlDoc rootElType el el' | el -> el', el' -> el where
 class XmlIdsFromRoot rootElType where
   xmlIds :: rootElType -> XmlIds -- public, system id
 
--- TODO add class constraint to determine el from st and doc 
+-- TODO add class constraint to determine el from st and doc
 class XmlDocT elst el doc |  doc elst -> el where
   xmlDocT :: (PT elst el) -> doc
 
@@ -284,7 +292,7 @@ data PT a b = PT a b -- phantom type containing state a and the result b
 
 class AttrOk elType attr
 class AddAttrT attrType attrValue st el st2 el2
-      | st attrType -> st2 
+      | st attrType -> st2
       , st st2 el2 -> el
   where
   addAttrT :: PT st el -> attrType -> attrValue -> PT st2 el2
@@ -302,7 +310,7 @@ instance (
 #else
       , IdClass req req'
 #endif
-      , DetermineEl (AS req  added) el 
+      , DetermineEl (AS req  added) el
                     (AS HNil (HCons (A attrType) added)) el2
       ) => AddAttrT attrType attrValue
                     (NYV (Element elType (AS req  added) st HFalse)) el
@@ -352,7 +360,7 @@ instance (
                      (Valid celType) elc
                      (NYV (Element elType stA st' HTrue)) el2
   ) => AddElT (NYV (Element elType stA st HFalse)) el
-              (Valid celType) elc 
+              (Valid celType) elc
               (NYV (Element elType stA st' HTrue)) el2
               where
  addElT (PT _ t) (PT _ c) = PT (undefined :: est') $ addEl (endAttrs t) c
@@ -368,7 +376,7 @@ instance (
                      (Valid celType) elc
                      (NYV (Element elType stA st' HTrue)) el
   ) => AddElT (NYV (Element elType stA st HTrue)) el
-              (Valid celType) elc 
+              (Valid celType) elc
               (NYV (Element elType stA st' HTrue)) el
               where
  addElT (PT _ t) (PT _ c)= PT (undefined :: est') $ addEl t c
@@ -389,7 +397,7 @@ instance (
                      (NYV (Element celType cstA cst chchs)) elc
                      (NYV (Element elType stA st' HTrue)) el2
   ) => AddElT (NYV (Element elType  stA st hchs)) el
-              (NYV (Element celType cstA     cst   chchs)) elc 
+              (NYV (Element celType cstA     cst   chchs)) elc
               (NYV (Element elType stA st' HTrue)) el2
 
   where

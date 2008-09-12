@@ -116,7 +116,7 @@ contentToState e (Just _) (Seq [Right _]) = error "doo!"
 contentToState e mbCont (Seq ((Right _):_)) = error "Right should have been the last element passed by (3)"
 contentToState e mbCont (Seq ((Left x):xs@(_:_))) = do
     cont <- contentToState False mbCont $ Seq xs
-    contentToState e (Just cont) x
+    trace ("cont in seq " ++ (show cont)) $ contentToState e (Just cont) x
 contentToState e mbCont (Choice list) = noDup $ do
     list' <- mapM (toTransform e mbCont) list
     let maps = map (elmap . snd) list'
@@ -138,7 +138,7 @@ contentToState e mbCont (Star chd) = noDup $ do
   -- building NextState to be passed as continuation
   (StateList nId sr) <- get -- new id to be passed as continuation
   put $ StateList (nId + 1) sr
-  let e' = e || isNothing mbCont
+  let e' = (trace (">>>" ++(show mbCont))) $  e || maybe True (endable . snd) mbCont
   chdWithoutCont <- contentToState e' Nothing chd
     -- nsCont to be passed to real nsCont, breaking loop 
   let nsCont = (nId, NextState e'$ M.union
@@ -207,9 +207,10 @@ data DataState = DataState {
   , stateList :: StateList  -- try reusing state transformations to not get too many instances..
   , realised :: S.Set Int -- list of already realised state state transformations
                     -- (thus class and data type already has been generated)
+  , elements :: [( String, String) ] -- element name, starting state 
   , nameGen :: NameGenerator
   }
-initialDataState = DataState S.empty emptyStateList S.empty (simpleNameGenerator undefined undefined)
+initialDataState = DataState S.empty emptyStateList S.empty [] (simpleNameGenerator undefined undefined)
 
 -- all the template stuff
 
@@ -237,11 +238,18 @@ instanceShow dataName value = do
 
 
 #ifdef DoValidate
+addInfo n s = modify (\ds -> ds { elements = (n,s) : elements ds } )
 -- initial state ready for starting type based parser
 elementState :: String -> H.ContentSpec -> StateT DataState Q (TypeQ, [DecQ])
-elementState n H.EMPTY = return $ (conT ''T.EMPTY, [])
-elementState n H.ANY = return $ (conT ''T.ANY, [])
-elementState n (H.Mixed H.PCDATA) = return $ (conT ''T.PCDATA, [])
+elementState n H.EMPTY = do
+      addInfo n "empty"
+      return $ (conT ''T.EMPTY, [])
+elementState n H.ANY = do
+      addInfo n "any"
+      return $ (conT ''T.ANY, [])
+elementState n (H.Mixed H.PCDATA) = do
+      addInfo n "pcdata"
+      return $ (conT ''T.PCDATA, [])
 elementState n (H.Mixed (H.PCDATAplus list)) =
     realise n $ contentToState False Nothing $ Star $ Choice $
         Left (Child PCDATA) : map (Left . Child . T) list
@@ -277,6 +285,7 @@ realise n stF = do
     when debugStateCount $ ST.lift $ runIO $ do
       hPutStrLn stdout $ n ++ " states: " ++ (show $ S.size sts) ++ " new : " ++ (show $ S.size new)
       hFlush stdout
+    addInfo n $ "St " ++ (show id)
     return $ ( conT $ stateName id
              , concatMap (\id -> realiseST ng id . fromJust . M.lookup id $ stListRev) (S.elems new))
   where
@@ -386,7 +395,7 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
     {- runElemI :: VXML st el st2 el2 st3 el3 a -> (a, el3)
        runElemI (VXML f) = 
         let (a,p) = f id
-        in  p (PT (undefined :: ) (createEl (undefined :: Elem)))
+        in  (a, p (PT (undefined :: ) (createEl (undefined :: Elem))))
      - -}
      let [f] = map mkName ["f"]
      in funD runElemI' [ clause [conP 'VXML [varP f]] (normalB 
@@ -414,6 +423,7 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
                   (a,p) <- $(varE f) id
                   return (a, p (T.PT $(sigUnd elst) (createEl $(sigUnd $ conT elDataName))))
           |]) []]
+{-
    , let [m,t1,st,st1,el,el1,t] = map mkName ["m","t1","st","st1","el","el1","t"]
      in sigD (mkName $ (runElemT ng n)) $ -- why do I need this type signature ?
        forallT [t1,st1,el,t,el1,st,m]
@@ -424,6 +434,7 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
                         [ appTn (conT ''VXMLT) [ varT m, elst, varT t1, elst, varT t1, varT st1, varT el1, varT t ]
                         , appTn (tupleT 2) [ varT t, varT el ]
                         ])
+-}
     , funD (mkName $ runElemT ng n) [ clause [] (normalB 
           [| liftM (\(a,b) -> (a, T.fromPT b)) . $(varE runElemTI') |]) []]
 
@@ -544,7 +555,7 @@ simpleNameGenerator _ _ = NameGenerator {
   , execElem = ("exec" ++) . fstUpper
   , evalElem = ("eval" ++) . fstUpper
   , runElemT = (\s -> "run" ++ s ++ "T" ) . fstUpper
-  , runElemTI = (\s -> "run" ++ s ++ "T'" ) . fstUpper
+  , runElemTI = (\s -> "run" ++ s ++ "TI" ) . fstUpper
   , execElemT = (\s -> "exec" ++ s ++ "T" ) . fstUpper
   , evalElemT = (\s -> "eval" ++ s ++ "T" ) . fstUpper
 }
@@ -665,13 +676,17 @@ dtdToTypes mbNG file (XmlIds pub sys) = do
 
         let all = attrDecs ++ types ++ docClass
         gs <- ST.get
-        let text = unlines $    ( if showGeneratedCode then
+        let text = unlines $    ( if showGeneratedCode 
+                                   then
                                       ("-- ============= generated code based on " ++ file)
                                        : map pprint all
                                        ++ [ "-- ============ generated code end =====================================" ]
-                             else [] )
+                                   else [] )
 
-                             ++ if debugStates then [ "debug states: ", show (stateList gs)] else []
+                             ++ if debugStates 
+                                  then  [ "starting states:" ] ++ (map (\(n,s) -> n ++ " -> " ++ s) (elements gs))
+                                        ++ [ "debug states: ", show (stateList gs)] 
+                                  else []
 
         when showGeneratedCode $ ST.lift $ runIO $ do -- for debugging purposes print generated code
                  hPutStrLn stdout text

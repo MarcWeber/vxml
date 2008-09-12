@@ -1,4 +1,4 @@
-<!ELEMENT root (a*,b)*>
+<!ELEMENT root (a|b)*>
 <!ATTLIST root
   rootAttr     CDATA          #IMPLIED
   >
