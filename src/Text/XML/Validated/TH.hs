@@ -1,9 +1,4 @@
 {-# LANGUAGE ScopedTypeVariables,  PatternGuards, StandaloneDeriving,  MultiParamTypeClasses, TemplateHaskell #-}
-#if (__GLASGOW_HASKELL__ > 608)
-  {-# LANGUAGE ScopedTypeVariables #-}
-#else
-  {-# LANGUAGE PatternSignatures #-}
-#endif
 module Text.XML.Validated.TH (
   dtdToTypes
   -- exported for XmlToQ.hs
@@ -275,7 +270,7 @@ contentToStateE  a = contentToState False Nothing a
 -- of the start state which should be realized return a list of declarations
 realise :: String -> ST.State StateList (Int, NextState) -> ST.StateT DataState Q (TypeQ , [ DecQ ] )
 realise n stF = do
-    (gs :: DataState) <- ST.get
+    gs <- ST.get
     let ((id,_), stList') = ST.runState stF (stateList gs :: StateList)
         stListRev = stateReduction stList'
         sts = S.fromList $ usedSTS (S.empty) stListRev id
