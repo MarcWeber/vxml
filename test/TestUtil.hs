@@ -38,7 +38,7 @@ haskellFile repoDir moduleName extraImports contents =
                else [] ) ++ 
           [ "{-# OPTIONS_GHC -fcontext-stack=200 #-}"
           , "{-# LANGUAGE UndecidableInstances, FlexibleContexts,  MultiParamTypeClasses,"
-          , "FlexibleInstances,  EmptyDataDecls,  TemplateHaskell #-}"
+          , "FlexibleInstances,  EmptyDataDecls,  TemplateHaskell, FunctionalDependencies #-}"
           , "module " ++ (fromMaybe "Main" moduleName) ++ " where"
           , "import Language.Haskell.TH"
           , "import Control.Monad"

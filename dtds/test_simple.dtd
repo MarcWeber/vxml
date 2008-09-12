@@ -1,19 +1,11 @@
-<!ELEMENT root (y*,z)*>
-
+<!ELEMENT root (a*,b)*>
+<!ATTLIST root
+  rootAttr     CDATA          #IMPLIED
+  >
 
 <!ELEMENT a EMPTY>
 <!ELEMENT b EMPTY>
 
-
-<!ELEMENT x EMPTY>
-<!ELEMENT y EMPTY>
-<!ELEMENT z EMPTY>
-
-
-
-<!ATTLIST root
-  rootAttr     CDATA          #IMPLIED
-  >
 <!ATTLIST a
   aAttr     CDATA          #IMPLIED
   bAttr     CDATA          #IMPLIED

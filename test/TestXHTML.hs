@@ -1,4 +1,4 @@
-{-# LANGUAGE UndecidableInstances, FlexibleContexts,  MultiParamTypeClasses,  FlexibleInstances,  EmptyDataDecls,  TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances, FlexibleContexts,  MultiParamTypeClasses,  FlexibleInstances,  EmptyDataDecls,  TemplateHaskell, FunctionalDependencies #-}
 module TestXHTML where
 import Prelude ((++),(.))
 import Language.Haskell.TH
@@ -23,12 +23,9 @@ import Text.XML.Validated.Util (fstLower, fstUpper)
 $( do
       -- you probably want to use the daufault NameGenerator instead.
       -- using a custom one here only to assure it works
-      let ng a b = (simpleNameGenerator a b) {
-                uiAddAttr = (++ "_A") . fstLower
-              , uiElName = (++ "_T") . fstLower
-              }
-      dtdToTypes (Just ng)
+      dtdToTypes (Just intelligentNameGenerator)
                  "dtds/xhtml1-20020801/DTD/xhtml1-strict_onefile.dtd" 
                  (XmlIds (Just "-//W3C//DTD XHTML 1.0 Strict//EN") 
                          (Just "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd") ) 
  )
+

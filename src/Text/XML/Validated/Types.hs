@@ -158,11 +158,6 @@ class VXMLMonad m  st el  st2 el2  st3 el3  st4 el4
     , st st4 el4 -> el
     , st st2 el2 -> el
     , st st4 el4 -> el
-    , st -> st2
-    , st -> st3
-    , st -> st3
-    , st -> st4
-    , st3 -> st4
     where
   vxmlgtgt ::  m st el  st2 el2  st3 el3  a
             -> m st el  st3 el3  st4 el4  b
@@ -172,7 +167,7 @@ class VXMLMonad m  st el  st2 el2  st3 el3  st4 el4
               -> (a -> m st el  st3 el3  st4 el4  b)
               -> m st el  st2 el2  st4 el4  b
 class VXMLReturn m where
-  vxmlreturn :: a -> m  st el  st el  st el  a
+  vxmlreturn :: a -> m  st el  st2 el2  st2 el2  a
 
 data VXML st el     -- input element
           st2 el2   -- type of result of passed function
@@ -273,18 +268,16 @@ class XmlIdsFromRoot rootElType where
 class XmlDocT elst el doc |  doc elst -> el where
   xmlDocT :: (PT elst el) -> doc
 
-{-
 -- instance ended root element
 instance ( XmlDoc rootElType el doc
         , XmlIdsFromRoot rootElType
         ) => XmlDocT (Valid rootElType) el doc where
   xmlDocT (PT _ e) = xmlDoc (undefined :: rootElType) (xmlIds (undefined :: rootElType)) e
 -- instance not yet ended root elemnt
-instance  EndElT (NYV (Element elType stA st hchs)) el1 st' el
-         , XmlDocT elst el doc
+instance ( EndElT (NYV (Element elType stA st hchs)) el st' el
+         ,XmlDocT st' el doc
         ) => XmlDocT (NYV (Element elType stA st hchs)) el doc where
   xmlDocT = xmlDocT . endElT
--}
 
 
 data PT a b = PT a b -- phantom type containing state a and the result b
