@@ -27,6 +27,12 @@ installation notes:
   c-e are commented out by default (then you don't need the dependencies
       benchpress and HUnit)
 
+usage:
+-----
+  see testSimple.hs
+  you can use a different name generator if you don't like the default function
+  names
+
 Validation errors are indicated by missing instances. Examples:
 ---------------------------------------------------------------
 
@@ -80,3 +86,5 @@ Credits to:
   * Igloo, dcoutts and quicksilver for listening to my questions they had no
     chance to solve because I've missed the problem somewhere else
   * You for reading this README and giving some feedback
+  * Peter Thiemann for his inspiring papers and work about and on WASH
+  * the ghc team, but you all know this

@@ -17,7 +17,7 @@ module Text.XML.Validated.Types (
   , (<<<) --  may change
   , AddTextT(..)  -- addTextT: add PCDATA to element. alias (<<<)
   , EndElT(..)
-  -- , XmlDocT(..) -- use xml instead
+  , XmlDocT(..) -- use alias xml instead
   , xml    -- validate, return result type of root element with doctype
   , fromPT -- validate, return result type of any non root element
   -- , text -- flip addTextT
@@ -259,7 +259,7 @@ class EndAttrsEndElement elType el elFinal
 class AddText el text where
   addText :: el -> text -> el -- el, text node
 
--- after this no attributes can be allowed
+-- after this no more attributes
 class EndEl elType el elFinal where
   endEl :: elType -> el -> elFinal
 

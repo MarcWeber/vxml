@@ -522,12 +522,14 @@ data NameGenerator = NameGenerator {
   , elemAttr :: String -> String
   , runElemI :: String -> String -- internal version of runElem 
   , runElem :: String -> String --  (\(a,b) -> (a, fromPT b)) . runElemI
-  , execElem :: String -> String
-  , evalElem :: String -> String
+  , runElemDoc :: String -> String -- the same as runElem, but adding the doctype 
+  --, execElem :: String -> String
+  --, evalElem :: String -> String
   , runElemTI :: String -> String
   , runElemT :: String -> String
-  , execElemT :: String -> String
-  , evalElemT :: String -> String
+  , runElemDocT :: String -> String -- the same as runElem, but adding the doctype 
+  --, execElemT :: String -> String
+  --, evalElemT :: String -> String
   }
 
 -- used by test cases, default is intelligentNameGenerator
@@ -547,12 +549,14 @@ simpleNameGenerator _ _ = NameGenerator {
   , elemAttr = (++ "A") . fstLower -- append _A to never conflict with elem 
   , runElem = ("run" ++) . fstUpper
   , runElemI = (\s -> "run" ++ s ++ "'") . fstUpper
-  , execElem = ("exec" ++) . fstUpper
-  , evalElem = ("eval" ++) . fstUpper
+  , runElemDoc = (\s -> "run" ++ s ++ "Doc") . fstUpper
+  --, execElem = ("exec" ++) . fstUpper
+  --, evalElem = ("eval" ++) . fstUpper
   , runElemT = (\s -> "run" ++ s ++ "T" ) . fstUpper
   , runElemTI = (\s -> "run" ++ s ++ "TI" ) . fstUpper
-  , execElemT = (\s -> "exec" ++ s ++ "T" ) . fstUpper
-  , evalElemT = (\s -> "eval" ++ s ++ "T" ) . fstUpper
+  , runElemDocT = (\s -> "run" ++ s ++ "DocT") . fstUpper
+  --, execElemT = (\s -> "exec" ++ s ++ "T" ) . fstUpper
+  --, evalElemT = (\s -> "eval" ++ s ++ "T" ) . fstUpper
 }
 
 noKeyWords s = fromMaybe s $ M.lookup s map
@@ -582,9 +586,19 @@ dtdToTypes mbNG file (XmlIds pub sys) = do
           attrNamesUniq = nub $ map (\(H.AttDef n _ _) -> n)
                               $ concatMap ( (\(Just (H.AttListDecl _ l)) -> l) . snd . snd ) zipped
           ng = (fromMaybe intelligentNameGenerator mbNG) (map fst zipped) attrNamesUniq
+          rootName = fst . head $ zipped
 
       in (flip evalStateT) (initialDataState { nameGen = ng } ) $ do
         -- shared attribute names and instances
+        docs <- ST.lift $ sequence [
+            -- runElemDoc 
+              funD (mkName $ runElemDoc ng rootName) [ clause [] (normalB 
+                  [| (\(a,b) -> (a, T.xmlDocT b)) . $(varE $ mkName $ runElemI ng rootName) |]) []]
+            -- runElemDocT
+            , funD (mkName $ runElemDocT ng rootName) [ clause [] (normalB 
+                    [| liftM (\(a,b) -> (a, T.xmlDocT b)) . $(varE $ mkName $ runElemTI ng rootName ) |]) []]
+            ]
+
         attrDecs <- 
           liftM concat $ mapM (\ n ->
             do let name = (dataAttrName ng) n
@@ -669,7 +683,7 @@ dtdToTypes mbNG file (XmlIds pub sys) = do
                 [ funD 'xmlIds [ clause [wildP] (normalB (appEn (conE 'XmlIds) (map toMaybeStr [pub, sys]))) []] ]
             ]
 
-        let all = attrDecs ++ types ++ docClass
+        let all = concat [attrDecs, docs, types, docClass]
         gs <- ST.get
         let text = unlines $    ( if showGeneratedCode 
                                    then
