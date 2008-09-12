@@ -1,0 +1,27 @@
+dtd:
+<!ELEMENT root (y*,z)*>
+
+<!ELEMENT y EMPTY>
+<!ELEMENT z EMPTY>
+valid:
+<root> </root>
+valid:
+<root> <z/> <z/>  </root>
+valid:
+<root> <y/> <z/>  </root>
+valid:
+<root> <y/> <y/> <z/>  </root>
+valid:
+<root> <y/> <z/>  <y/> <y/> <z/> </root>
+valid:
+<root>  <z/> </root>
+valid:
+<root>  <z/>  <y/> <z/> </root>
+valid:
+<root> <y/> <z/> <z/>  </root>
+invalid:
+<root> <z/> <y/>  </root>
+invalid:
+<root> <y/> </root>
+invalid:
+<root> <y/> <y/> </root>

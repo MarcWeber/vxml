@@ -36,9 +36,9 @@ haskellFile repoDir moduleName extraImports contents =
           ++ ( if (isNothing moduleName) 
                then [ "-- ghc-options: -XOverlappingInstances, -cpp" ++ concatMap (", " ++ ) flags ] 
                else [] ) ++ 
-          [ "{-# OPTIONS_GHC -fcontext-stack=200 #-}"
-          , "{-# LANGUAGE UndecidableInstances, FlexibleContexts,  MultiParamTypeClasses,"
-          , "FlexibleInstances,  EmptyDataDecls,  TemplateHaskell #-}"
+          [ "{-# LANGUAGE ScopedTypeVariables,  NoImplicitPrelude, FlexibleInstances,  NoMonomorphismRestriction,"
+          , "UndecidableInstances,  FlexibleContexts,  EmptyDataDecls, TemplateHaskell,"
+          , "StandaloneDeriving, TypeSynonymInstances, MultiParamTypeClasses, FunctionalDependencies#-}"
           , "module " ++ (fromMaybe "Main" moduleName) ++ " where"
           , "import Language.Haskell.TH"
           , "import Control.Monad"

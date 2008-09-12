@@ -1,0 +1,16 @@
+<!ELEMENT root (a|b)*>
+<!ATTLIST root
+  rootAttr     CDATA          #IMPLIED
+  >
+
+<!ELEMENT a EMPTY>
+<!ELEMENT b EMPTY>
+
+<!ATTLIST a
+  aAttr     CDATA          #IMPLIED
+  bAttr     CDATA          #IMPLIED
+  >
+<!ATTLIST b
+  aAttr     CDATA          #IMPLIED
+  bAttr     CDATA          #IMPLIED
+  >

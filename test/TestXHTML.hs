@@ -1,4 +1,13 @@
-{-# LANGUAGE UndecidableInstances, FlexibleContexts,  MultiParamTypeClasses,  FlexibleInstances,  EmptyDataDecls,  TemplateHaskell #-}
+{-# LANGUAGE ScopedTypeVariables,  NoImplicitPrelude, FlexibleInstances,  NoMonomorphismRestriction,
+ UndecidableInstances,  FlexibleContexts,  EmptyDataDecls, TemplateHaskell,
+ StandaloneDeriving, TypeSynonymInstances, MultiParamTypeClasses, FunctionalDependencies
+ #-}
+#if(__GLASGOW_HASKELL__ > 608)
+{-# LANGUAGE ScopedTypeVariables #-}
+#else
+--  ? why doesn't ghc-6.8.2 recognize this? 
+{-# LANGUAGE PatternSignatures #-}
+#endif
 module TestXHTML where
 import Prelude ((++),(.))
 import Language.Haskell.TH
@@ -23,12 +32,7 @@ import Text.XML.Validated.Util (fstLower, fstUpper)
 $( do
       -- you probably want to use the daufault NameGenerator instead.
       -- using a custom one here only to assure it works
-      let ng a b = (simpleNameGenerator a b) {
-                uiAddAttr = (++ "_A") . fstLower
-              , uiAddAttrFlip = (++ "_AF") . fstLower
-              , uiElName = (++ "_T") . fstLower
-              }
-      dtdToTypes (Just ng)
+      dtdToTypes (Just intelligentNameGenerator)
                  "dtds/xhtml1-20020801/DTD/xhtml1-strict_onefile.dtd" 
                  (XmlIds (Just "-//W3C//DTD XHTML 1.0 Strict//EN") 
                          (Just "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd") ) 

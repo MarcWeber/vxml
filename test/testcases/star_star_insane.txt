@@ -1,0 +1,9 @@
+dtd:
+<!ELEMENT root (a*)*>
+<!ELEMENT a EMPTY>
+valid:
+<root> </root>
+valid:
+<root> <a/> <a/> </root>
+valid:
+<root> <a/> </root>
