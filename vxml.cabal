@@ -23,6 +23,8 @@ Library
                   , directory
   exposed-modules: Text.XML.Validated.Types
                    Text.XML.Validated.Instance.String
+                   Text.XML.Validated.TH
+
   hs-source-dirs:  src
   extensions: CPP
   if flag(DoValidate)
