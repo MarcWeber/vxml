@@ -24,6 +24,7 @@ Library
   exposed-modules: Text.XML.Validated.Types
                    Text.XML.Validated.Instance.String
                    Text.XML.Validated.TH
+  other-modules:  Text.XML.Validated.Util
 
   hs-source-dirs:  src
   extensions: CPP
