@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -fcontext-stack=100 #-}
 {-# LANGUAGE NoMonomorphismRestriction,  ScopedTypeVariables, EmptyDataDecls,
     FunctionalDependencies, FlexibleInstances, FlexibleContexts,
-    MultiParamTypeClasses, UndecidableInstances #-}
+    MultiParamTypeClasses, UndecidableInstances, Rank2Types #-}
 
 {- see cabal file
 #ifndef TypeToNatTypeEq
@@ -22,7 +22,9 @@ module Text.XML.Validated.Types (
   , fromPT -- validate, return result type of any non root element
   -- , text -- flip addTextT
   -- monadic like functions  (see test.hs for a convinient usage with help of cpp)
-  , VXMLMonad(..), VXML(..), VXMLT(..), VXMLReturn(..), vxmllift, VXMLText(..)
+  , VXMLMonad(..), VXML(..), VXMLT(..), VXMLReturn(..), vxmllift, VXMLText(..), ForceElements(..)
+  , VXMLDebug(..) -- show types of VXML monad
+  , vxmlSeq_, vxmlSeqPlus_, vxmlMapSeq_, vxmlMapSeqPlus_
 
   -- implementation for different result types:
   -- see example in Instances
@@ -162,6 +164,28 @@ class VXMLMonad m  st el  st2 el2  st3 el3  st4 el4
   vxmlbind :: m st el  st2 el2  st3 el3 a
               -> (a -> m st el  st3 el3  st4 el4  b)
               -> m st el  st2 el2  st4 el4  b
+
+
+class (StEndAttrs elType stA
+  ) => ForceElements m elType stA st hchs where
+  forceElements :: m elst el 
+                     (NYV (Element elType stA st hchs) ) el
+                     (NYV (Element elType stA st HTrue) ) el
+                     ()
+instance ( StEndAttrs elType stA
+   ) => ForceElements VXML elType stA st hchs where
+  forceElements = VXML $ \f -> ((), \pt-> let (PT _ el) = f pt in  PT undefined el)
+instance ( StEndAttrs elType stA
+         , Monad m
+ ) => ForceElements (VXMLT m) elType stA st hchs where
+  forceElements = VXMLT $ \f -> return ((), \pt-> let (PT _ el) = f pt in  PT undefined el)
+
+class VXMLDebug m  st el  st2 el2  st3 el3  a  where
+  vxmldebug :: a -> m  st el  st2 el2  st3 el3  a
+  vxmldebug = undefined
+instance (Fail (m st el  st2 el2  st3 el3  a))
+   => VXMLDebug m  st el  st2 el2  st3 el3  a
+
 class VXMLReturn m where
   vxmlreturn :: a -> m  st el  st2 el2  st2 el2  a
 
@@ -213,6 +237,24 @@ instance ( Monad m
           , AddTextT el2 el2 text st2 st3
           ) => VXMLText text (VXMLT m) st el st2 el2 st3 el3 where 
   text t = VXMLT $ \p -> return ((),(`addTextT` t) . p)
+
+
+--  purpose of *Plus variants see testXHTMTL, the trouble is eg that XHTML defines
+--  ul as (li)+. Thus you have St1 :li  -> St2,  St2 (endable): li -> St2 to encode the plus.
+--  so the first li function must have a different type from the second.
+vxmlSeq_ = foldr1 (\a n -> a `vxmlgtgt` n)
+vxmlSeqPlus_ (f,fl) = f `vxmlgtgt` vxmlSeq_ fl
+
+vxmlMapSeq_ f = vxmlSeq_ . map f
+vxmlMapSeqPlus_ :: ( VXMLMonad m st el st4 el4 st4 el4 st4 el4
+                   , VXMLMonad m st el st3 el3 st4 el4 st4 el4
+                   , DetermineEl st3 el3 st4 el4
+                   ) => (forall st' el' st'' el'' . t -> m st el st' el' st'' el'' a)
+                  -> [t]
+                  -> m st el st3 el3 st4 el4 a
+vxmlMapSeqPlus_ f (x:xs) = vxmlSeqPlus_ (f x, map f xs)
+vxmlMapSeqPlus_ _ [] = error "vxmlSeqPlus has been called with empty list"
+
 
 -- ========== classes to generate the result type ====================
 -- mainly targeting kind of String output (see Instances/ * )
@@ -352,6 +394,7 @@ instance (
     EndAttrs el el2
   , AddEl el2 elc
 #ifdef DoValidate
+  , StEndAttrs elType stA
   , Consume st (Elem celType) st'
 #else
   , IdClass st st'

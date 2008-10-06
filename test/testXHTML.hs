@@ -31,6 +31,7 @@ import TestXHTML as X
 fStr :: (a,String) -> (a,String)
 fStr = Prelude.id
 
+
 main = do
   let tDo f = do
               -- let t@(a, b :: String) = f -- String selects result type. (see instances directory)
@@ -43,9 +44,17 @@ main = do
               putStrLn $ "xml : " ++ b
 
       e = vxmlreturn ()
+      -- function creating the doc with contnet c
+#include "vxmldos.h"
+      testLib c =
+          tDo $ runHtmlDoc $ vdo
+            xmlns "http://www.w3.org/1999/xhtml"
+            lang "en-US"
+            -- xml:lang "en-US"
+            head $ title $ text "minimal"
+            body c
 
 #if (__GLASGOW_HASKELL__ > 608)
-#include "vxmldos.h"
   tDo $ runHtmlDoc $ vdo
     head $ title $ text "text"
     body $ vdo
@@ -69,6 +78,15 @@ main = do
       h1 $ text "minimal"
       div $ text $ "args passed to this program: " ++ (show args)
 
-#endif
+  -- testLib $ ul $ vdo
+  --   [>forceElements
+  --   [>(vxmlSeqPlus_ (li $ text $ "first", Prelude.map (li . text .show) [ 1..10]))
+  --   vxmlMapSeqPlus_ (\n -> li $ vxmlreturn ()  ) [1..10]
 
+  print $ fStr $ runUl $ vdo
+          -- forceElements
+          -- (vxmlSeqPlus_ (li $ text $ "first", Prelude.map (li . text .show) [ 1..10]))
+          vxmlMapSeqPlus_ (\n -> li $ vxmlreturn ()  ) [1..10]
+
+#endif
   print "end"
