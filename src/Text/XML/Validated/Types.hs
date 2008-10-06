@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -fcontext-stack=100 #-}
-{-# LANGUAGE NoMonomorphismRestriction,  ScopedTypeVariables, EmptyDataDecls,
+{-# LANGUAGE TypeSynonymInstances,  NoMonomorphismRestriction,  ScopedTypeVariables, EmptyDataDecls,
     FunctionalDependencies, FlexibleInstances, FlexibleContexts,
     MultiParamTypeClasses, UndecidableInstances, Rank2Types #-}
 
@@ -12,11 +12,12 @@
 module Text.XML.Validated.Types (
   -- your interface: (memomic: trailing T for with phantom _T_ypes or _t_yped)
     AddAttrT(..)  -- addAttrT: use the function generation by template haskell instead called "attrname_A"
-  , (<<) -- may change
+  , (<<) -- may change (TODO tidy up)
   , AddElT(..)    -- addElT: add sub element. alias (<<)
-  , (<<<) --  may change
+  , (<<<) --  may change (TODO tidy up)
   , AddTextT(..)  -- addTextT: add PCDATA to element. alias (<<<)
   , EndElT(..)
+  , EndAttrsT(..)
   , XmlDocT(..) -- use alias xml instead
   , xml    -- validate, return result type of root element with doctype
   , fromPT -- validate, return result type of any non root element
@@ -42,6 +43,7 @@ module Text.XML.Validated.Types (
 
 
   -- exported for utils and TH, you should not have to use them
+  , InitialState, CreateElT(..)
   , Element, AS, AttrOk
 #ifdef DoValidate
   , ANY, C, PCDATA, A, ElEndable
@@ -127,7 +129,7 @@ fromPT = fromPTInternal . endElT
 -- fromPTInternal: take result type before final validation (done in endElT), internal
 -- use only
 fromPTInternal :: (PT st el) -> el
-fromPTInternal (PT _ v) = v
+fromPTInternal (PT v) = v
 
 -- xml is alias for xmlDocT. xmlDocT is the same as fromPT but it also adds the
 -- doc type declaration
@@ -149,52 +151,54 @@ xml = xmlDocT
    Hopefully we can use rebindable syntax to make this work
 -}
 
-class VXMLMonad m  st el  st2 el2  st3 el3  st4 el4
-    | el2 st st2 -> el
-    , st st3 el3 -> el
-    , st st3 el3 -> el
-    , st st4 el4 -> el
-    , st st2 el2 -> el
-    , st st4 el4 -> el
+class VXMLMonad m  st el_  st2 el2_  st3 el3_  st4 el4_
+#ifndef STRING_ONLY
+    | el2_ st st2 -> el_
+    , st st3 el3_ -> el_
+    , st st3 el3_ -> el_
+    , st st4 el4_ -> el_
+    , st st2 el2_ -> el_
+    , st st4 el4_ -> el_
+#endif
     where
-  vxmlgtgt ::  m st el  st2 el2  st3 el3  a
-            -> m st el  st3 el3  st4 el4  b
-            -> m st el  st2 el2  st4 el4  b
+  vxmlgtgt ::  m st el_  st2 el2_  st3 el3_  a
+            -> m st el_  st3 el3_  st4 el4_  b
+            -> m st el_  st2 el2_  st4 el4_  b
   vxmlgtgt a b = vxmlbind a $ const b
-  vxmlbind :: m st el  st2 el2  st3 el3 a
-              -> (a -> m st el  st3 el3  st4 el4  b)
-              -> m st el  st2 el2  st4 el4  b
+  vxmlbind :: m st el_  st2 el2_  st3 el3_ a
+              -> (a -> m st el_  st3 el3_  st4 el4_  b)
+              -> m st el_  st2 el2_  st4 el4_  b
 
 
 class (StEndAttrs elType stA
   ) => ForceElements m elType stA st hchs where
-  forceElements :: m elst el 
-                     (NYV (Element elType stA st hchs) ) el
-                     (NYV (Element elType stA st HTrue) ) el
+  forceElements :: m elst el_ 
+                     (NYV (Element elType stA st hchs) ) el_
+                     (NYV (Element elType stA st HTrue) ) el_
                      ()
 instance ( StEndAttrs elType stA
    ) => ForceElements VXML elType stA st hchs where
-  forceElements = VXML $ \f -> ((), \pt-> let (PT _ el) = f pt in  PT undefined el)
+  forceElements = VXML $ \f -> ((), \pt-> let (PT el_) = f pt in  PT el_)
 instance ( StEndAttrs elType stA
          , Monad m
  ) => ForceElements (VXMLT m) elType stA st hchs where
-  forceElements = VXMLT $ \f -> return ((), \pt-> let (PT _ el) = f pt in  PT undefined el)
+  forceElements = VXMLT $ \f -> return ((), \pt-> let (PT el_) = f pt in  PT el_)
 
-class VXMLDebug m  st el  st2 el2  st3 el3  a  where
-  vxmldebug :: a -> m  st el  st2 el2  st3 el3  a
+class VXMLDebug m  st el_  st2 el2_  st3 el3_  a  where
+  vxmldebug :: a -> m  st el_  st2 el2_  st3 el3_  a
   vxmldebug = undefined
 instance (Fail (m st el  st2 el2  st3 el3  a))
    => VXMLDebug m  st el  st2 el2  st3 el3  a
 
 class VXMLReturn m where
-  vxmlreturn :: a -> m  st el  st2 el2  st2 el2  a
+  vxmlreturn :: a -> m  st el_  st2 el2_  st2 el2_  a
 
-data VXML st el     -- input element
-          st2 el2   -- type of result of passed function
-          st3 el3 a --  type of result of resulting function
+data VXML st el_     -- input element
+          st2 el2_   -- type of result of passed function
+          st3 el3_ a --  type of result of resulting function
           = VXML {
-          runVVXML ::     (PT st el -> PT st2 el2)
-                    -> (a, PT st el -> PT st3 el3)
+          runVVXML ::     (PT st el_ -> PT st2 el2_)
+                    -> (a, PT st el_ -> PT st3 el3_)
           }
 
 instance VXMLMonad VXML st el  st2 el2  st3 el3  st4 el4 where
@@ -205,9 +209,9 @@ instance VXMLReturn VXML where
   vxmlreturn a = VXML $ \p -> (a,p)
 
 -- with inner monad
-data VXMLT m st el  st2 el2  st3 el3 a  = VXMLT {
-          runVVXMLT ::       (PT st el -> PT st2 el2)
-                    -> m (a, PT st el -> PT st3 el3)
+data VXMLT m st el_  st2 el2_  st3 el3_ a  = VXMLT {
+          runVVXMLT ::       (PT st el_ -> PT st2 el2_)
+                    -> m (a, PT st el_ -> PT st3 el3_)
           }
 instance (Monad m
         ) => VXMLMonad (VXMLT m)
@@ -225,10 +229,16 @@ vxmllift f = VXMLT $ \p -> do
   a <- f
   return (a, p)
 
-class VXMLText text m st el st2 el2 st3 el3
+--  purpose of *Plus variants see testXHTMTL, the trouble is eg that XHTML defines
+class VXMLText text m st el_ st2 el2_ st3 el3_
       | st2 -> st3
-      , st2 st3 el3 -> el2  where
-      text :: text -> m st el st2 el2 st3 el2 ()
+#ifdef STRING_ONLY
+      , el2_ -> el_, el_ -> el3_,  el3_ -> el2_
+#else
+      , st2 st3 el3_ -> el2_
+#endif
+      where
+      text :: text -> m st el_ st2 el2_ st3 el2_ ()
 instance ( AddTextT el2 el2 text st2 st3
         ) => VXMLText text VXML st el st2 el2 st3 el2 where 
   text t = VXML $ \p -> ((),(`addTextT` t) . p)
@@ -239,7 +249,6 @@ instance ( Monad m
   text t = VXMLT $ \p -> return ((),(`addTextT` t) . p)
 
 
---  purpose of *Plus variants see testXHTMTL, the trouble is eg that XHTML defines
 --  ul as (li)+. Thus you have St1 :li  -> St2,  St2 (endable): li -> St2 to encode the plus.
 --  so the first li function must have a different type from the second.
 vxmlSeq_ = foldr1 (\a n -> a `vxmlgtgt` n)
@@ -248,8 +257,13 @@ vxmlSeqPlus_ (f,fl) = f `vxmlgtgt` vxmlSeq_ fl
 vxmlMapSeq_ f = vxmlSeq_ . map f
 vxmlMapSeqPlus_ :: ( VXMLMonad m st el st4 el4 st4 el4 st4 el4
                    , VXMLMonad m st el st3 el3 st4 el4 st4 el4
+#ifdef STRING_ONLY
+                   , TypesEq el3 el4
+                   , TypesEq el el3
+#else
                    , DetermineEl st3 el3 st4 el4
-                   ) => (forall st' el' st'' el'' . t -> m st el st' el' st'' el'' a)
+#endif
+                   ) => (forall st' elA st'' elB . t -> m st el st' elA st'' elB a)
                   -> [t]
                   -> m st el st3 el3 st4 el4 a
 vxmlMapSeqPlus_ f (x:xs) = vxmlSeqPlus_ (f x, map f xs)
@@ -260,31 +274,29 @@ vxmlMapSeqPlus_ _ [] = error "vxmlSeqPlus has been called with empty list"
 -- mainly targeting kind of String output (see Instances/ * )
 
 -- used for AddAttrT
-class DetermineEl st el st2 el2 | st st2 el2 -> el
-class DetermineElAddEl st el st2 el2 stc elc
-
-      | st st2 stc el2 -> el
-      , st st2 stc el2 -> elc
+#ifndef STRING_ONLY
+class DetermineEl est el_ est2 el2_ | est est2 el2_ -> el_
+class DetermineElAddEl est el_ estc elc_ est2 el2_
+      | est est2 estc el2_ -> el_
+      , est est2 estc el2_ -> elc_
+#endif
 
 data XmlIds = XmlIds {
   publicId :: Maybe String
   , systemId :: Maybe String
   }
 
-class CreateEl elType el where
-  createEl :: elType -> el
+class CreateEl elType el_ where
+  createEl :: elType -> el_
 
-class AddAttribute el el2 attrType attrValue where
-  addAttribute :: el -> attrType -> attrValue -> el2
+class AddAttribute el_ el2_ attrType attrValue where
+  addAttribute :: el_ -> attrType -> attrValue -> el2_
 
 -- after this no attributes can be allowed
-class EndAttrs el el2 where
-  endAttrs :: el -> el2
-class AddEl el elc | el -> elc, elc -> el
-    -- el -> elc: from a not finalized element can a finalized be deduced (maybe not necessary)
-    -- elc -> el so that you can just give the end type and the types before will be infered automatically
-  where
-  addEl :: el -> elc -> el -- el, child
+class EndAttrs el_ el2_ where
+  endAttrs :: el_ -> el2_
+class AddEl el_ el2_ elc_ where
+  addEl :: el_ -> elc_ -> el2_ -- el, child
 
 {- quote from XML spec:
   Empty-element tags may be used for any element which has no content, whether or
@@ -292,21 +304,21 @@ class AddEl el elc | el -> elc, elc -> el
   empty-element tag SHOULD be used, and SHOULD only be used, for elements which
   are declared EMPTY
 -}
-class EndAttrsEndElement elType el elFinal
+class EndAttrsEndElement elType el_ elFinal
   where
-  endAttrsEndElement, endAttrsEndElementDeclaredEmpty :: elType -> el -> elFinal
+  endAttrsEndElement, endAttrsEndElementDeclaredEmpty :: elType -> el_ -> elFinal
   endAttrsEndElementDeclaredEmpty _ = endAttrsEndElement (undefined :: elType)
   endAttrsEndElement _ = endAttrsEndElementDeclaredEmpty (undefined :: elType)
 
-class AddText el text where
-  addText :: el -> text -> el -- el, text node
+class AddText el_ text where
+  addText :: el_ -> text -> el_ -- el_, text node
 
 -- after this no more attributes
-class EndEl elType el elFinal where
-  endEl :: elType -> el -> elFinal
+class EndEl elType el_ elFinal where
+  endEl :: elType -> el_ -> elFinal
 
-class XmlDoc rootElType el el' | el -> el', el' -> el where
-  xmlDoc :: rootElType -> XmlIds -> el -> el'
+class XmlDoc rootElType el_ elA_ | el_ -> elA_, elA_ -> el_ where
+  xmlDoc :: rootElType -> XmlIds -> el_ -> elA_
 
 -- ========== type level implementation ==============================
 
@@ -314,33 +326,48 @@ class XmlDoc rootElType el el' | el -> el', el' -> el where
 class XmlIdsFromRoot rootElType where
   xmlIds :: rootElType -> XmlIds -- public, system id
 
--- TODO add class constraint to determine el from st and doc
-class XmlDocT elst el doc |  doc elst -> el where
-  xmlDocT :: (PT elst el) -> doc
+class XmlDocT elst el_ doc 
+  |  doc elst -> el_ where
+  xmlDocT :: PT elst el_ -> doc
 
--- instance ended root element
-instance ( XmlDoc rootElType el doc
+instance ( XmlDoc rootElType el2 doc
         , XmlIdsFromRoot rootElType
-        ) => XmlDocT (Valid rootElType) el doc where
-  xmlDocT (PT _ e) = xmlDoc (undefined :: rootElType) (xmlIds (undefined :: rootElType)) e
--- instance not yet ended root elemnt
-instance ( EndElT (NYV (Element elType stA st hchs)) el st' el
-         ,XmlDocT st' el doc
-        ) => XmlDocT (NYV (Element elType stA st hchs)) el doc where
-  xmlDocT = xmlDocT . endElT
+        , EndElT (Valid rootElType) el st el2
+                            ) => XmlDocT (Valid rootElType) el doc where
+  xmlDocT e = 
+        let PT el = endElT e
+        in xmlDoc (undefined :: rootElType)
+               (xmlIds (undefined :: rootElType))
+               el
+               
 
+data PT a b = PT b -- phantom type containing state a and the result b
 
-data PT a b = PT a b -- phantom type containing state a and the result b
+-- ============ create an ElT ==========================================
+
+-- instances of InitialState will be generated by TH 
+class InitialState elType initialState
+    | elType -> initialState
+class (
+  InitialState elType initialState
+  , CreateEl elType el
+  ) => CreateElT elType initialState el where
+  createElT :: elType -> PT initialState el
+  createElT _ = PT $ createEl (undefined :: elType)
 
 class AttrOk elType attr
-class AddAttrT attrType attrValue st el st2 el2
+class AddAttrT attrType attrValue st el_ st2 el2_
       | st attrType -> st2
-      , st st2 el2 -> el
+#ifndef STRING_ONLY
+      , el2_ -> el_, el_ -> el2_
+#else
+      , st st2 el2_ -> el_
+#endif
   where
-  addAttrT :: PT st el -> attrType -> attrValue -> PT st2 el2
+  addAttrT :: PT st el_ -> attrType -> attrValue -> PT st2 el2_
 
 instance (
-        AddAttribute el el2 attrType attrValue
+                            AddAttribute el el2 attrType attrValue
       , AttrOk elType attrType
 #ifdef DoValidate
       , -- remove attribute from required list
@@ -350,18 +377,21 @@ instance (
         HMember (A attrType) added rd
       , CheckDuplicateAttribute elType attrType rd
 #else
-      , IdClass req req'
+      , TypesEq req req'
 #endif
+#ifdef STRING_ONLY
+      , TypesEq el el2
+#else
       , DetermineEl (AS req  added) el
                     (AS HNil (HCons (A attrType) added)) el2
+#endif
       ) => AddAttrT attrType attrValue
                     (NYV (Element elType (AS req  added) st HFalse)) el
-                    (NYV (Element elType (AS HNil (HCons (A attrType) added)) st HFalse)) el2
+                    (NYV (Element elType (AS req' (HCons (A attrType) added)) st HFalse)) el2
 
 
   where
-  addAttrT (PT _ t) _ v = PT (undefined :: st2)
-                          (addAttribute t (undefined :: attrType) v)
+  addAttrT (PT t) _ v = PT (addAttribute t (undefined :: attrType) v)
      -- fail nicer error messages
 instance ( YouCantAddAttributesAfterAddingContentTo elType
       ) => AddAttrT attrType attrValue (NYV (Element elType stA st HTrue)) el st2 el2
@@ -380,75 +410,70 @@ instance ( DuplicateAttribute elType attrType
 
 #endif
 
--- ========== adding sub elements (tags) =============================
-class (
-  DetermineElAddEl est el estc elc est2 el2
-  ) => AddElT est el estc elc est2 el2
-    | estc est -> est2
-    , est est2 estc el2 -> el
-    , est est2 estc el2 -> elc
-    where
-  addElT :: PT est el -> PT estc elc -> PT est2 el2
--- first child ? (then endAttrs must be called)
+-- ========== ending attributes ====================================== 
+class EndAttrsT est el est2 el2 
+    | est est2 el2 -> el
+    , est -> est2
+  where
+  endAttrsT :: (PT est el) -> (PT est2 el2)
+
 instance (
     EndAttrs el el2
-  , AddEl el2 elc
-#ifdef DoValidate
-  , StEndAttrs elType stA
-  , Consume st (Elem celType) st'
-#else
-  , IdClass st st'
-#endif
-  , DetermineElAddEl (NYV (Element elType stA st HFalse)) el
-                     (Valid celType) elc
-                     (NYV (Element elType stA st' HTrue)) el2
-  ) => AddElT (NYV (Element elType stA st HFalse)) el
-              (Valid celType) elc
-              (NYV (Element elType stA st' HTrue)) el2
-              where
- addElT (PT _ t) (PT _ c) = PT (undefined :: est') $ addEl (endAttrs t) c
--- not first child
-instance (
-    AddEl el elc
-#ifdef DoValidate
-  , Consume st (Elem celType) st'
-#else
-  , IdClass st st'
-#endif
-  , DetermineElAddEl (NYV (Element elType stA st HTrue)) el
-                     (Valid celType) elc
-                     (NYV (Element elType stA st' HTrue)) el
-  ) => AddElT (NYV (Element elType stA st HTrue)) el
-              (Valid celType) elc
-              (NYV (Element elType stA st' HTrue)) el
-              where
- addElT (PT _ t) (PT _ c)= PT (undefined :: est') $ addEl t c
--- validate child
-instance (
-    AddEl el elc'
-#ifdef DoValidate
-  , Consume st (Elem celType) st'
-#else
-  , IdClass st st'
-#endif
-  , EndElT (NYV (Element celType cstA cst chchs)) elc
-           (Valid celType) elc
-  , AddElT (NYV (Element elType  stA   st  hchs )) el
-           (Valid celType) elc
-           (NYV (Element elType  stA   st' HTrue)) el2
-  , DetermineElAddEl (NYV (Element elType stA st hchs)) el
-                     (NYV (Element celType cstA cst chchs)) elc
-                     (NYV (Element elType stA st' HTrue)) el2
-  ) => AddElT (NYV (Element elType  stA st hchs)) el
-              (NYV (Element celType cstA     cst   chchs)) elc
-              (NYV (Element elType stA st' HTrue)) el2
-
+    , StEndAttrs elType stA
+    , DetermineEl (NYV (Element elType stA     st HFalse)) el 
+                  (NYV (Element elType AttrsOk st HFalse)) el2
+    ) => EndAttrsT (NYV (Element elType stA     st HFalse)) el
+                   (NYV (Element elType AttrsOk st HFalse)) el2
   where
- addElT el childEl = addElT el $ endElT childEl
+  endAttrsT (PT t) = PT $ endAttrs t
+
+-- no operation instance used in AddElT 
+instance (
+    ) => EndAttrsT (NYV (Element elType AttrsOk st hchs)) el
+                   (NYV (Element elType AttrsOk st hchs)) el
+  where
+  endAttrsT  = id
+-- ========== adding sub elements (tags) attrs ok =============================
+class AddElT est el_ 
+             estc elc_
+             est2 el2_
+    | est estc -> est2
+    , est est2 estc el2_ -> el_
+    , est est2 estc el2_ -> elc_
+    where
+  addElT :: PT est el_ -> PT estc elc_ -> PT est2 el2_
+
+instance (
+        EndElT cest elc 
+              (Valid celType) elc2
+
+      , EndAttrsT (NYV (Element elType stA st hchs)) el
+                  (NYV (Element elType AttrsOk st hchs)) el2
+
+      , DetermineEl (NYV (Element elType stA st hchs)) el
+                    (NYV (Element elType AttrsOk st hchs)) el2
+
+      , DetermineElAddEl 
+              (NYV (Element elType AttrsOk st hchs)) el2
+              cest2 elc2
+              (NYV (Element elType AttrsOk st2 HTrue)) el3
+      , AddEl el2 el3 elc2
+
+      , Consume st (Elem celType) st2
+
+  ) => AddElT (NYV (Element elType stA st hchs)) el
+              cest elc
+              (NYV (Element elType AttrsOk st2 HTrue)) el3
+              where
+    addElT e c = 
+      let (PT e') = endAttrsT e
+          (PT c') = endElT c
+      in PT $ addEl (e' :: el2) (c' :: elc2)
+  
 
 -- ========== adding sub elements (text) =============================
-class AddTextT el el2 text elst elst2 | el -> el2, el2 -> el, elst -> elst2 where
-  addTextT :: PT elst el -> text -> PT elst2 el2
+class AddTextT el_ el2_ text elst elst2 | el_ -> el2_, el2_ -> el_, elst -> elst2 where
+  addTextT :: PT elst el_ -> text -> PT elst2 el2_
 -- first child
 instance (
     EndAttrs el el2
@@ -459,62 +484,72 @@ instance (
 #ifdef DoValidate
   , Consume st PCDATA st'
 #else
-  , IdClass st st'
+  , TypesEq st st'
 #endif
   ) => AddTextT el el2 text (NYV (Element elType stA st  HFalse))
                             (NYV (Element elType stA st' HTrue))
   where
-  addTextT (PT _ t) text = PT undefined $ addText (endAttrs t) text
+  addTextT (PT t) text = PT $ addText (endAttrs t) text
 -- not first child
 instance (
     AddText el text
 #ifdef DoValidate
   , Consume st PCDATA st'
 #else
-  , IdClass st st'
+  , TypesEq st st'
 #endif
   ) => AddTextT el el text (NYV (Element elType stA st  HTrue))
                            (NYV (Element elType stA st' HTrue))
   where
-  addTextT (PT _ t) text = PT undefined $ addText t text
+  addTextT (PT t) text = PT $ addText t text
 
 -- ========== final element check ====================================
-class EndElT st el st2 el2
+class EndElT st el_ st2 el2_
       | st -> st2
-      , st st2 el2 -> el
+#ifdef STRING_ONLY
+      , el2_ -> el_, el_ -> el2_
+#else
+      , st st2 el2_ -> el_
+#endif
     where
-    endElT :: (PT st el)
-           -> (PT st2 el2)
+    endElT :: (PT st el_)
+           -> (PT st2 el2_)
 -- end element with childs
 instance ( EndEl elType el el2
 #ifdef DoValidate
          , ElEndable elType st
 #endif
+#ifndef STRING_ONLY
          , DetermineEl (NYV (Element elType stA st HTrue)) el
                              (Valid elType) el2
+#endif
          ) => EndElT (NYV (Element elType stA st HTrue)) el
                      (Valid elType) el2
-  where endElT (PT _ el) = PT undefined (endEl (undefined :: elType)  el)
+  where endElT (PT el_) = PT (endEl (undefined :: elType)  el_)
 -- end elements without childs declared EMPTY
 instance ( EndAttrsEndElement elType el el2
 #ifdef DoValidate
          , StEndAttrs elType stA
 #endif
+#ifndef STRING_ONLY
          , DetermineEl (NYV (Element elType stA EMPTY HFalse)) el
                        (Valid elType) el2
+#endif
          ) => EndElT (NYV (Element elType stA EMPTY HFalse)) el
                      (Valid elType) el2
-  where endElT (PT _ el) = PT undefined (endAttrsEndElementDeclaredEmpty (undefined :: elType) el)
+  where endElT (PT el_) = PT (endAttrsEndElementDeclaredEmpty (undefined :: elType) el_)
 -- end elements without childs not declared EMPTY
 #ifdef DoValidate
 instance ( EndAttrsEndElement elType el el2
          , StEndAttrs elType stA
          , ElEndable elType st
+#ifndef STRING_ONLY
          , DetermineEl (NYV (Element elType stA st HFalse)) el
                        (Valid elType) el2
+#endif
          ) => EndElT (NYV (Element elType stA st HFalse)) el
                      (Valid elType) el2
-  where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
+  where endElT (PT el_) = PT (endAttrsEndElement (undefined :: elType) el_)
 #else
 instance ( EndAttrsEndElement elType el el2
          , DetermineEl (NYV (Element elType stA NoValidation HFalse)) el
@@ -531,6 +566,7 @@ instance ( EndAttrsEndElement elType el el2
 -- element content accept stuff
 data Element elType stAttributes elementsState hasChilds
 data AS req added -- attribute state
+data AttrsOk      -- is replaced by this after the first element has been added 
 -- elType: the element type_T
 -- hasChilds: HTrue or HFalse, is necessary to to know wether empty tags <br/> can be used
 
@@ -546,6 +582,7 @@ instance ( MoreElementsExpected elType (Elem a)) =>  ElEndable elType (Elem a)
 
 class StEndAttrs elType elst
 instance  StEndAttrs elType (AS HNil added)
+instance StEndAttrs elType AttrsOk -- already ok 
   -- fail nicer error messages
 instance  ( RequiredAttributesMissing elType (HCons a b)
           ) => StEndAttrs elType (AS (HCons a b) added)
@@ -562,7 +599,7 @@ data Valid elType -- "state" of validated element
 data C      -- consumed, no element left
 data F a    --
 
-class Consume st el r | st el -> r -- result is on of C,CS,R,F
+class Consume st el_ r | st el_ -> r -- result is on of C,CS,R,F
 
 -- PCDATA
 instance Consume PCDATA PCDATA C
@@ -591,7 +628,16 @@ class DuplicateAttribute elType attrType
 debugEl :: (Fail x) => (PT x String) -> b
 debugEl = undefined
 
---  ========= type level equality helper =============================
+#if defined(STRING_ONLY) || !defined(DoValidate)
+class TypesEq a b | a -> b, b -> a
+instance TypesEq a a
+#endif
+#ifndef DoValidate
+data NoValidation
+#endif
+
+---  ========= type level equality helper =============================
+-- Thanks Oleg Kiselyov for helping me here
 instance ( TypeEq a b r) => HEq (A a) (A b) r
 
 class TypeCast   a b   | a -> b, b->a   where typeCast   :: a -> b
@@ -604,8 +650,3 @@ instance TypeCast'' () a a where typeCast'' _ x  = x
 instance (HBool b, TypeCast HFalse b
           ) => TypeEq x y b
 instance TypeEq x x HTrue
-#ifndef DoValidate
-class IdClass a b | a -> b
-instance IdClass  a a
-data NoValidation
-#endif

@@ -111,7 +111,7 @@ contentToState e (Just _) (Seq [Right _]) = error "doo!"
 contentToState e mbCont (Seq ((Right _):_)) = error "Right should have been the last element passed by (3)"
 contentToState e mbCont (Seq ((Left x):xs@(_:_))) = do
     cont <- contentToState False mbCont $ Seq xs
-    trace ("cont in seq " ++ (show cont)) $ contentToState e (Just cont) x
+    contentToState e (Just cont) x
 contentToState e mbCont (Choice list) = noDup $ do
     list' <- mapM (toTransform e mbCont) list
     let maps = map (elmap . snd) list'
@@ -133,7 +133,7 @@ contentToState e mbCont (Star chd) = noDup $ do
   -- building NextState to be passed as continuation
   (StateList nId sr) <- get -- new id to be passed as continuation
   put $ StateList (nId + 1) sr
-  let e' = (trace (">>>" ++(show mbCont))) $  e || maybe True (endable . snd) mbCont
+  let e' = e || maybe True (endable . snd) mbCont
   chdWithoutCont <- contentToState e' Nothing chd
     -- nsCont to be passed to real nsCont, breaking loop 
   let nsCont = (nId, NextState e'$ M.union
@@ -377,6 +377,17 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
    , -- instanceElementShow
      instanceShow elDataName n
 
+   , -- InitialState Root (NYV ...) 
+   let [elType, initialState] = map mkName [ "elType", "initialState"]
+   in instanceD  (cxt [])
+                 (appTn (conT ''T.InitialState) [ conT elDataName,  elst])
+                 []
+   , -- CreateElT instance: 
+   let [elType, initialState, el] = map mkName [ "elType", "initialState", "el"]
+   in instanceD  (cxt [ appTn (conT ''CreateEl) [ conT elDataName, varT el ]
+                      ])
+                 (appTn (conT ''T.CreateElT) [ conT elDataName, elst, varT el])
+                 []
    , -- function elname for convinience
    let [elType, initialState, el] = map mkName [ "elType", "initialState", "el"]
    in sigD (mkName $ (uiElName ng) n) $ -- why do I need this type signature ?
@@ -384,19 +395,20 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
        (cxt [ appTn (conT ''CreateEl) [ conT elDataName, varT el ]
             ]) (appTn (conT ''PT) [ elst, varT el])
    , funD (mkName $ (uiElName ng) n)
-       [ clause [] (normalB ( appEn (conE 'PT) [ undType elst, appE (varE 'createEl) (undType (conT elDataName)) ])) []] 
+       [ clause [] (normalB ( appEn (conE 'PT) [ appE (varE 'createEl) (undType (conT elDataName)) ])) []] 
 
    , -- runElem 
     {- runElemI :: VXML st el st2 el2 st3 el3 a -> (a, el3)
        runElemI (VXML f) = 
         let (a,p) = f id
-        in  (a, p (PT (undefined :: ) (createEl (undefined :: Elem))))
+        in  (a, p (createElT (undefined :: Elem)))
      - -}
+      -- $(sigUnd elst)   TODO remove this line
      let [f] = map mkName ["f"]
      in funD runElemI' [ clause [conP 'VXML [varP f]] (normalB 
            [|
             let (a,p) = $(varE f) id
-            in   (a, p (T.PT $(sigUnd elst) (createEl $(sigUnd $ conT elDataName))))
+            in   (a, p (createElT $(sigUnd $ conT elDataName)))
           |]) []]
 
    , let [t1,st,st1,el,el1,t] = map mkName ["t1","st","st1","el","el1","t"]
@@ -404,6 +416,7 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
        forallT [t1,st1,el,t,el1,st]
          (cxt [ appTn (conT ''CreateEl) [ conT elDataName, varT t1 ]
               , appTn (conT ''EndElT) ( map varT [ st1, el1, st, el ])
+              , appTn (conT ''CreateElT) [conT elDataName, elst, varT t1]
               ]) (appTn arrowT 
                         [ appTn (conT ''VXML) [ elst, varT t1, elst, varT t1, varT st1, varT el1, varT t ]
                         , appTn (tupleT 2) [ varT t, varT el ]
@@ -412,11 +425,12 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
           [| (\(a,b) -> (a, T.fromPT b)) . $(varE $ runElemI') |]) []]
 
     , -- runElemT 
+    -- TODO $(sigUnd elst)  remove this line 
      let [f] = map mkName ["f"]
      in funD runElemTI' [ clause [conP 'VXMLT [varP f]] (normalB 
            [| do
                   (a,p) <- $(varE f) id
-                  return (a, p (T.PT $(sigUnd elst) (createEl $(sigUnd $ conT elDataName))))
+                  return (a, p (createElT $(sigUnd $ conT elDataName)))
           |]) []]
 {-
    , let [m,t1,st,st1,el,el1,t] = map mkName ["m","t1","st","st1","el","el1","t"]
@@ -467,6 +481,7 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
    let [ st2, el2, st3, el3, stc3, elc3,  elc, f ] = map mkName [ "st2", "el2", "st3", "el3", "stc3", "elc3", "elc", "f"] 
    in instanceD  (cxt [ appTn (conT ''T.AddElT) [ varT st2, varT el2, varT stc3, varT elc3, varT st3, varT el3 ]
                      , appTn (conT ''T.CreateEl) [ conT elDataName, varT elc]
+                     , appTn (conT ''CreateElT) [ conT elDataName, elst, varT elc ]
                      ])
                  (appTn (conT classElem') (conT ''VXML : map varT [elc, stc3, elc3, st2, el2, st3, el3]))
                  [ funD elemName' [ clause [varP f] (normalB 
@@ -488,6 +503,7 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
    in instanceD  (cxt [ appT (conT ''Monad) (varT m)
                      , appTn (conT ''T.AddElT) [ varT st2, varT el2, varT stc3, varT elc3 , varT st3, varT el3]
                      , appTn (conT ''T.CreateEl) [ conT elDataName, varT elc]
+                     , appTn (conT ''CreateElT) [ conT elDataName, elst, varT elc]
                      ])
                  (appTn (conT classElem') (appT (conT ''VXMLT) (varT m) : map varT [elc, stc3, elc3, st2, el2, st3, el3]))
                  [ funD elemName' [ clause [varP f] (normalB 
@@ -548,7 +564,7 @@ simpleNameGenerator _ _ = NameGenerator {
   , elemName = fstLower  -- monadic element name of class classElem 
   , elemAttr = (++ "A") . fstLower -- append _A to never conflict with elem 
   , runElem = ("run" ++) . fstUpper
-  , runElemI = (\s -> "run" ++ s ++ "'") . fstUpper
+  , runElemI = (\s -> "run" ++ s ++ "Int") . fstUpper
   , runElemDoc = (\s -> "run" ++ s ++ "Doc") . fstUpper
   --, execElem = ("exec" ++) . fstUpper
   --, evalElem = ("eval" ++) . fstUpper

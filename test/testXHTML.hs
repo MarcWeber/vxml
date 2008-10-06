@@ -55,7 +55,8 @@ main = do
             body c
 
 #if (__GLASGOW_HASKELL__ > 608)
-  tDo $ runHtmlDoc $ vdo
+  -- tDo $ runHtmlDoc $ vdo
+  tDo $ runHtml $ vdo
     head $ title $ text "text"
     body $ vdo
       script $ X.type "text/javascript" >> text "document.writeln('hi');"
@@ -68,7 +69,8 @@ main = do
       div e
       return "That's nice, isn't it?"
 
-  tDoM $ runHtmlDocT $ vdo
+  -- tDoM $ runHtmlDocT $ vdo
+  tDoM $ runHtmlT $ vdo
     xmlns "http://www.w3.org/1999/xhtml"
     lang "en-US"
     -- xml:lang "en-US"
@@ -85,8 +87,9 @@ main = do
 
   print $ fStr $ runUl $ vdo
           -- forceElements
-          -- (vxmlSeqPlus_ (li $ text $ "first", Prelude.map (li . text .show) [ 1..10]))
-          vxmlMapSeqPlus_ (\n -> li $ vxmlreturn ()  ) [1..10]
+          vxmlSeqPlus_ (li $ text $ "first", Prelude.map (li . text .show) [ 1..10])
+          -- TODO howto do this? 
+          -- vxmlMapSeqPlus_ (\n -> li $ vxmlreturn ()  ) [1..10]
 
 #endif
   print "end"

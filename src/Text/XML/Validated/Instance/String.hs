@@ -21,7 +21,7 @@ instance (Show attrType
       ++ "=\"" ++ (stringToHtmlString value) ++ "\""
 instance EndAttrs String String where
   endAttrs tag = tag ++ ">"
-instance AddEl String String where
+instance AddEl String String String where
   addEl = (++)
 instance AddText String String where
   addText el text = el ++ (stringToHtmlString text)

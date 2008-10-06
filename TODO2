@@ -47,3 +47,502 @@ id is not found by HaXml ? (different id attributes have been there as well
 
 
       | attrType st -> st2 where 
+
+
+req'  ist nicht verwendet in AddAttr
+
+Changelog:
+StEndAttrs jetz -> AttrsOk
+
+data PT a b = PT a b -> data PT a b = PT b
+
+
+
+{-
+-- first child ? check attrs
+instance (
+    AddEl el el2 elc
+  , Consume st (Elem celType) st'
+#ifdef DoValidate
+  , StEndAttrs elType stA
+#else
+  , 
+#endif
+  ) => AddElT (NYV (Element elType AttrsOk st HFalse)) el
+              (Valid celType) elc
+              (NYV (Element elType AttrsOk st HTrue)) el2
+              where
+
+    addElT (PT t) (PT c) = PT $ addEl t c
+
+
+-- first childs, check attrs first 
+instance (
+    EndAttrs el el2
+  , AddEl el2 el elc
+#ifdef DoValidate
+  , StEndAttrs elType stA
+  , Consume st (Elem celType) st'
+#else
+  , TypesEq st st'
+#endif
+#ifdef STRING_ONLY
+  , TypesEq el el2
+  , TypesEq el2 el3
+  , TypesEq elc el
+#else
+  , DetermineElAddEl (NYV (Element elType stA st HFalse)) el
+                     (Valid celType) elc
+                     (NYV (Element elType stA st' HTrue)) el3
+
+#endif
+  ) => AddElT (NYV (Element elType stA st HFalse)) el
+              (Valid celType) elc
+              (NYV (Element elType stA st' HTrue)) el3
+              where
+ addElT p c = addElT p (endAttrsT c) 
+class AddTextT el_ el2_ text elst elst2 
+      | el_ -> el2_, el2_ -> el_, elst -> elst2
+  where
+  addTextT :: PT elst el_ -> text -> PT elst2 el2_
+-- first child
+instance (
+    EndAttrs el el2
+#ifdef DoValidate
+  , StEndAttrs elType stA
+#endif
+  , AddText el2 text
+#ifdef DoValidate
+  , Consume st PCDATA st'
+#else
+  , TypesEq st st'
+#endif
+  ) => AddTextT el el2 text (NYV (Element elType stA st  HFalse))
+                            (NYV (Element elType stA st' HTrue))
+  where
+  addTextT (PT t) text = PT $ addText (endAttrs t) text
+-}
+
+
+
+
+-- a 
+data RootAttr_A
+instance Show RootAttr_A
+    where show _ = "rootAttr"
+rootAttr_AA el val = addAttrT el (undefined :: RootAttr_A) val
+class RootAttr_CA m st el st2 el2 st3 el3 value | st -> st2, 
+                                                  st2 -> st3, 
+                                                  st st2 el2 -> el, 
+                                                  st st3 el3 -> el
+    where rootAttr :: forall . value ->
+                               m st el st2 el2 st3 el2 ()
+instance AddAttrT RootAttr_A
+                                           value
+                                           st2
+                                           el2
+                                           st3
+                                           el2 => RootAttr_CA VXML
+                                                              st
+                                                              el
+                                                              st2
+                                                              el2
+                                                              st3
+                                                              el3
+                                                              value
+    where rootAttr v = VXML $ (\p_0 -> ((), (\el_1 -> addAttrT el_1 (undefined :: RootAttr_A) v) .  p_0))
+instance (AddAttrT RootAttr_A
+                                            value
+                                            st2
+                                            el2
+                                            st3
+                                            el2, Monad m) => RootAttr_CA (VXMLT m)
+                                                                                  st
+                                                                                  el
+                                                                                  st2
+                                                                                  el2
+                                                                                  st3
+                                                                                  el3
+                                                                                  value
+    where rootAttr v = VXMLT $ (\p_0 -> return ((), (\el_1 -> addAttrT el_1 (undefined :: RootAttr_A) v) . p_0))
+data AAttr_A
+instance Show AAttr_A
+    where show _ = "aAttr"
+aAttr_AA el val = addAttrT el (undefined :: AAttr_A) val
+class AAttr_CA m st el st2 el2 st3 el3 value | st -> st2, 
+                                               st2 -> st3, 
+                                               st st2 el2 -> el, 
+                                               st st3 el3 -> el
+    where aAttr :: forall . value ->
+                            m st el st2 el2 st3 el2 ()
+instance AddAttrT AAttr_A
+                                           value
+                                           st2
+                                           el2
+                                           st3
+                                           el2 => AAttr_CA VXML
+                                                           st
+                                                           el
+                                                           st2
+                                                           el2
+                                                           st3
+                                                           el3
+                                                           value
+    where aAttr v = VXML $ (\p_0 -> ((),
+                                                                       (\el_1 -> addAttrT el_1 (undefined :: AAttr_A) v) . p_0))
+instance (AddAttrT AAttr_A
+                                            value
+                                            st2
+                                            el2
+                                            st3
+                                            el2, Monad m) => AAttr_CA (VXMLT m)
+                                                                               st
+                                                                               el
+                                                                               st2
+                                                                               el2
+                                                                               st3
+                                                                               el3
+                                                                               value
+    where aAttr v = VXMLT $ (\p_0 -> return ((), (\el_1 -> addAttrT el_1 (undefined :: AAttr_A) v) . p_0))
+data BAttr_A
+instance Show BAttr_A
+    where show _ = "bAttr"
+bAttr_AA el val = addAttrT el (undefined :: BAttr_A) val
+class BAttr_CA m st el st2 el2 st3 el3 value | st -> st2, 
+                                               st2 -> st3, 
+                                               st st2 el2 -> el, 
+                                               st st3 el3 -> el
+    where bAttr :: forall . value ->
+                            m st el st2 el2 st3 el2 ()
+instance AddAttrT BAttr_A
+                                           value
+                                           st2
+                                           el2
+                                           st3
+                                           el2 => BAttr_CA VXML
+                                                           st
+                                                           el
+                                                           st2
+                                                           el2
+                                                           st3
+                                                           el3
+                                                           value
+    where bAttr v = VXML $ (\p_0 -> ((),
+                                                                       (\el_1 -> addAttrT el_1 (undefined :: BAttr_A) v) .  p_0))
+instance (AddAttrT BAttr_A
+                                            value
+                                            st2
+                                            el2
+                                            st3
+                                            el2, Monad m) => BAttr_CA (VXMLT m)
+                                                                               st
+                                                                               el
+                                                                               st2
+                                                                               el2
+                                                                               st3
+                                                                               el3
+                                                                               value
+    where bAttr v = VXMLT $ (\p_0 -> return ((), (\el_1 -> addAttrT el_1 (undefined :: BAttr_A) v) .  p_0))
+runRootDoc = (\(a_0, b_1) -> (a_0,
+                              xmlDocT b_1)) .  runRootInt
+runRootDocT = liftM (\(a_0, b_1) -> (a_0,
+                                                   xmlDocT b_1)) .  runRootTI
+data Root_T
+instance Show Root_T
+    where show _ = "root"
+instance InitialState Root_T
+                                               (NYV (Element Root_T
+                                                                                                               (AS HNil
+                                                                                                                                            HNil)
+                                                                                                               State1
+                                                                                                               HFalse))
+root_TT :: forall elType initialState el . CreateEl Root_T
+                                                                             el => PT (NYV (Element Root_T
+                                                                                                                                                                               (AS HNil
+                                                                                                                                                                                                            HNil)
+                                                                                                                                                                               State1
+                                                                                                                                                                               HFalse))
+                                                                                                               el
+root_TT = PT (createEl (undefined :: Root_T))
+runRootInt (VXML f) = let (a_0,
+                                                    p_1) = f id
+                                                in (a_0,
+                                                    p_1 (createElT (undefined :: Root_T)))
+runRoot :: forall t1 st1 el t el1 st . 
+        (CreateEl Root_T t1
+        , EndElT st1 el1 st el
+        , CreateElT Root_T (NYV (Element Root_T (AS HNil HNil) State1 HFalse)) t1
+        )
+      => VXML (NYV (Element Root_T (AS HNil HNil) State1 HFalse)) t1 
+              (NYV (Element Root_T (AS HNil HNil) State1 HFalse)) t1 st1 el1 t 
+          -> (t, el) 
+runRoot = (\(a_0, b_1) -> (a_0, fromPT b_1)) . runRootInt
+runRootTI (VXMLT f) = do 
+  (a_0, p_1) <- f id
+  return (a_0, p_1 (createElT (undefined :: Root_T)))
+runRootT = liftM (\(a_0, b_1) -> (a_0, fromPT b_1)) .  runRootTI
+class Root_C m elc stc3 elc3 st2 el2 st3 el3 | el2 elc3 -> el3
+    where root :: forall a st el . m (NYV (Element Root_T
+                                                                                                     (AS HNil
+                                                                                                                                  HNil)
+                                                                                                     State1
+                                                                                                     HFalse))
+                                     elc
+                                     (NYV (Element Root_T
+                                                                                                     (AS HNil
+                                                                                                                                  HNil)
+                                                                                                     State1
+                                                                                                     HFalse))
+                                     elc
+                                     stc3
+                                     elc3
+                                     a ->
+                                   m st el st2 el2 st3 el3 a
+instance (AddElT st2
+                                          el2
+                                          stc3
+                                          elc3
+                                          st3
+                                          el3
+          , CreateEl Root_T
+                                                                                 elc
+          , CreateElT Root_T (NYV (Element Root_T (AS HNil HNil) State1 HFalse)) elc
+        ) => Root_C VXML
+                                                                                                elc
+                                                                                                stc3
+                                                                                                elc3
+                                                                                                st2
+                                                                                                el2
+                                                                                                st3
+                                                                                                el3
+    where root f = let (a_0, child_1) = runRootInt f
+                    in VXML $ (\p_2 -> (a_0, (\b_3 -> addElT b_3 child_1) . p_2))
+instance (Monad m, AddElT st2
+                                                            el2
+                                                            stc3
+                                                            elc3
+                                                            st3
+                                                            el3, CreateEl Root_T
+                                                                                                   elc) => Root_C (VXMLT m)
+                                                                                                                  elc
+                                                                                                                  stc3
+                                                                                                                  elc3
+                                                                                                                  st2
+                                                                                                                  el2
+                                                                                                                  st3
+                                                                                                                  el3
+    where root f = VXMLT $ (\p_0 -> do 
+                      (a_1, child_2) <- runRootTI f
+                      return (a_1, (\b_3 -> addElT b_3 child_2)  p_0))
+instance AttrOk Root_T RootAttr_A
+data State1
+instance Consume State1
+                                          (Elem A_T)
+                                          State1
+instance Consume State1
+                                          (Elem B_T)
+                                          State1
+instance ElEndable elType State1
+data A_T
+instance Show A_T
+    where show _ = "a"
+instance InitialState A_T
+                                               (NYV (Element A_T
+                                                                                                               (AS HNil
+                                                                                                                                            HNil)
+                                                                                                               EMPTY
+                                                                                                               HFalse))
+a_TT :: forall elType initialState el . CreateEl A_T
+                                                                          el => PT (NYV (Element A_T
+                                                                                                                                                                            (AS HNil
+                                                                                                                                                                                                         HNil)
+                                                                                                                                                                            EMPTY
+                                                                                                                                                                            HFalse))
+                                                                                                            el
+a_TT = PT (createEl (undefined :: A_T))
+runAInt (VXML f) = let (a_0,
+                                                 p_1) = f id
+                                             in (a_0,
+                                                 p_1 (createElT (undefined :: A_T)))
+runA :: forall t1 st1 el t el1 st . (CreateEl A_T
+                                                                       t1, EndElT st1
+                                                                                                           el1
+                                                                                                           st
+                                                                                                           el) => VXML (NYV (Element A_T
+                                                                                                                                                                                                                (AS HNil
+                                                                                                                                                                                                                                             HNil)
+                                                                                                                                                                                                                EMPTY
+                                                                                                                                                                                                                HFalse))
+                                                                                                                                                t1
+                                                                                                                                                (NYV (Element A_T
+                                                                                                                                                                                                                (AS HNil
+                                                                                                                                                                                                                                             HNil)
+                                                                                                                                                                                                                EMPTY
+                                                                                                                                                                                                                HFalse))
+                                                                                                                                                t1
+                                                                                                                                                st1
+                                                                                                                                                el1
+                                                                                                                                                t ->
+                                                                                                                  (t,
+                                                                                                                   el)
+runA = (\(a_0, b_1) -> (a_0,
+                        fromPT b_1))  runAInt
+runATI (VXMLT f) = do (a_0, p_1) <- f id
+                      return (a_0, p_1 (createElT (undefined :: A_T)))
+runAT = liftM (\(a_0, b_1) -> (a_0,
+                                             fromPT b_1))  runATI
+class A_C m elc stc3 elc3 st2 el2 st3 el3 | el2 elc3 -> el3
+    where a :: forall a st el . m (NYV (Element A_T
+                                                                                                  (AS HNil
+                                                                                                                               HNil)
+                                                                                                  EMPTY
+                                                                                                  HFalse))
+                                  elc
+                                  (NYV (Element A_T
+                                                                                                  (AS HNil
+                                                                                                                               HNil)
+                                                                                                  EMPTY
+                                                                                                  HFalse))
+                                  elc
+                                  stc3
+                                  elc3
+                                  a ->
+                                m st el st2 el2 st3 el3 a
+instance (AddElT st2
+                                          el2
+                                          stc3
+                                          elc3
+                                          st3
+                                          el3, CreateEl A_T
+                                                                                 elc) => A_C VXML
+                                                                                             elc
+                                                                                             stc3
+                                                                                             elc3
+                                                                                             st2
+                                                                                             el2
+                                                                                             st3
+                                                                                             el3
+    where a f = let (a_0, child_1) = runAInt f
+                 in VXML $ (\p_2 -> (a_0,
+                                                                       (\b_3 -> addElT b_3 child_1)  p_2))
+instance (Monad m, AddElT st2
+                                                            el2
+                                                            stc3
+                                                            elc3
+                                                            st3
+                                                            el3, CreateEl A_T
+                                                                                                   elc) => A_C (VXMLT m)
+                                                                                                               elc
+                                                                                                               stc3
+                                                                                                               elc3
+                                                                                                               st2
+                                                                                                               el2
+                                                                                                               st3
+                                                                                                               el3
+    where a f = VXMLT $ (\p_0 -> do (a_1, child_2) <- runATI f
+                                    return (a_1, (\b_3 -> addElT b_3 child_2)  p_0))
+instance AttrOk A_T AAttr_A
+instance AttrOk A_T BAttr_A
+data B_T
+instance Show B_T
+    where show _ = "b"
+instance InitialState B_T
+                                               (NYV (Element B_T
+                                                                                                               (AS HNil
+                                                                                                                                            HNil)
+                                                                                                               EMPTY
+                                                                                                               HFalse))
+b_TT :: forall elType initialState el . CreateEl B_T
+                                                                          el => PT (NYV (Element B_T
+                                                                                                                                                                            (AS HNil
+                                                                                                                                                                                                         HNil)
+                                                                                                                                                                            EMPTY
+                                                                                                                                                                            HFalse))
+                                                                                                            el
+b_TT = PT (createEl (undefined :: B_T))
+runBInt (VXML f) = let (a_0,
+                                                 p_1) = f id
+                                             in (a_0,
+                                                 p_1 (createElT (undefined :: B_T)))
+runB :: forall t1 st1 el t el1 st . (CreateEl B_T
+                                                                       t1, EndElT st1
+                                                                                                           el1
+                                                                                                           st
+                                                                                                           el) => VXML (NYV (Element B_T
+                                                                                                                                                                                                                (AS HNil
+                                                                                                                                                                                                                                             HNil)
+                                                                                                                                                                                                                EMPTY
+                                                                                                                                                                                                                HFalse))
+                                                                                                                                                t1
+                                                                                                                                                (NYV (Element B_T
+                                                                                                                                                                                                                (AS HNil
+                                                                                                                                                                                                                                             HNil)
+                                                                                                                                                                                                                EMPTY
+                                                                                                                                                                                                                HFalse))
+                                                                                                                                                t1
+                                                                                                                                                st1
+                                                                                                                                                el1
+                                                                                                                                                t ->
+                                                                                                                  (t,
+                                                                                                                   el)
+runB = (\(a_0, b_1) -> (a_0,
+                        fromPT b_1))  runBInt
+runBTI (VXMLT f) = do (a_0, p_1) <- f id
+                      return (a_0, p_1 (createElT (undefined :: B_T)))
+runBT = liftM (\(a_0, b_1) -> (a_0,
+                                             fromPT b_1))  runBTI
+class B_C m elc stc3 elc3 st2 el2 st3 el3 | el2 elc3 -> el3
+    where b :: forall a st el . m (NYV (Element B_T
+                                                                                                  (AS HNil
+                                                                                                                               HNil)
+                                                                                                  EMPTY
+                                                                                                  HFalse))
+                                  elc
+                                  (NYV (Element B_T
+                                                                                                  (AS HNil
+                                                                                                                               HNil)
+                                                                                                  EMPTY
+                                                                                                  HFalse))
+                                  elc
+                                  stc3
+                                  elc3
+                                  a ->
+                                m st el st2 el2 st3 el3 a
+instance (AddElT st2
+                                          el2
+                                          stc3
+                                          elc3
+                                          st3
+                                          el3, CreateEl B_T
+                                                                                 elc) => B_C VXML
+                                                                                             elc
+                                                                                             stc3
+                                                                                             elc3
+                                                                                             st2
+                                                                                             el2
+                                                                                             st3
+                                                                                             el3
+    where b f = let (a_0, child_1) = runBInt f
+                 in VXML $ (\p_2 -> (a_0,
+                                                                       (\b_3 -> addElT b_3 child_1)  p_2))
+instance (Monad m, AddElT st2
+                                                            el2
+                                                            stc3
+                                                            elc3
+                                                            st3
+                                                            el3, CreateEl B_T
+                                                                                                   elc) => B_C (VXMLT m)
+                                                                                                               elc
+                                                                                                               stc3
+                                                                                                               elc3
+                                                                                                               st2
+                                                                                                               el2
+                                                                                                               st3
+                                                                                                               el3
+    where b f = VXMLT $ (\p_0 -> do (a_1, child_2) <- runBTI f
+                                    return (a_1, (\b_3 -> addElT b_3 child_2)  p_0))
+instance AttrOk B_T AAttr_A
+instance AttrOk B_T BAttr_A
+instance XmlIdsFromRoot Root_T
+    where xmlIds _ = XmlIds (Just "custom-simple-test") Nothing
+-- b 

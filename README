@@ -24,8 +24,9 @@ installation notes:
   e) run-benchpress-test:
         vxml scaling speed test.. (will creat /tmp/vxml-benchpress/*)
 
-  c-e are commented out by default (then you don't need the dependencies
-      benchpress and HUnit)
+  c-e are not built out by default (then you don't need the dependencies
+      benchpress and HUnit). Enable them by passing eg by --fflags BuildTestSimple
+      to configure
 
 usage:
 -----
@@ -88,3 +89,4 @@ Credits to:
   * You for reading this README and giving some feedback
   * Peter Thiemann for his inspiring papers and work about and on WASH
   * the ghc team, but you all know this
+  * Daniel Fischer
