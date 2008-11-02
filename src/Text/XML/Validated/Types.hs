@@ -152,14 +152,6 @@ xml = xmlDocT
 -}
 
 class VXMLMonad m  st el_  st2 el2_  st3 el3_  st4 el4_
-#ifndef STRING_ONLY
-    | el2_ st st2 -> el_
-    , st st3 el3_ -> el_
-    , st st3 el3_ -> el_
-    , st st4 el4_ -> el_
-    , st st2 el2_ -> el_
-    , st st4 el4_ -> el_
-#endif
     where
   vxmlgtgt ::  m st el_  st2 el2_  st3 el3_  a
             -> m st el_  st3 el3_  st4 el4_  b
@@ -255,18 +247,12 @@ vxmlSeq_ = foldr1 (\a n -> a `vxmlgtgt` n)
 vxmlSeqPlus_ (f,fl) = f `vxmlgtgt` vxmlSeq_ fl
 
 vxmlMapSeq_ f = vxmlSeq_ . map f
-vxmlMapSeqPlus_ :: ( VXMLMonad m st el st4 el4 st4 el4 st4 el4
-                   , VXMLMonad m st el st3 el3 st4 el4 st4 el4
-#ifdef STRING_ONLY
-                   , TypesEq el3 el4
-                   , TypesEq el el3
-#else
-                   , DetermineEl st3 el3 st4 el4
-#endif
-                   ) => (forall st' elA st'' elB . t -> m st el st' elA st'' elB a)
+vxmlMapSeqPlus_ :: ( VXMLMonad m  st el  st2 el2  st3 el3  st3 el3
+                   , VXMLMonad m  st el  st3 el3  st3 el3  st3 el3
+                   ) => (forall st' elA st'' elB . t -> m  st el  st' elA  st'' elB ())
                   -> [t]
-                  -> m st el st3 el3 st4 el4 a
-vxmlMapSeqPlus_ f (x:xs) = vxmlSeqPlus_ (f x, map f xs)
+                  -> m st el st2 el2 st3 el3 ()
+vxmlMapSeqPlus_ f (x:xs) = vxmlSeqPlus_ (f x , map f xs)
 vxmlMapSeqPlus_ _ [] = error "vxmlSeqPlus has been called with empty list"
 
 
