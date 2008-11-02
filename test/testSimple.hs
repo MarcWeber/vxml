@@ -138,12 +138,11 @@ main = do
   -- in Javascript where the innerHtml of a DOM object is set
   tDoM $ runRootT $ testDoc
 
-  {- 
-      TODO: how to solve this?
+  -- TODO: how to solve this?
   print $ fStr $ runRoot $ vdo
           -- forceElements
-          vxmlSeqPlus_ ((c e), replicate 4 (c e))
-          -- vxmlMapSeqPlus_ (\n -> c e ) [1..10]
-  -}
+          (c e)
+          vxmlSeqPlus_ ((d e), replicate 9 (d e))
+          -- vxmlMapSeqPlus_ (\n -> d e ) [1..10]
 #endif
   print "\nsimple test end"

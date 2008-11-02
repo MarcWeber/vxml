@@ -1,4 +1,4 @@
-<!ELEMENT root (a|b|c+)*>
+<!ELEMENT root (a|b|(c,d+))*>
 <!ATTLIST root
   rootAttr     CDATA          #IMPLIED
   >
@@ -6,6 +6,7 @@
 <!ELEMENT a EMPTY>
 <!ELEMENT b EMPTY>
 <!ELEMENT c EMPTY>
+<!ELEMENT d EMPTY>
 
 <!ATTLIST a
   aAttr     CDATA          #IMPLIED

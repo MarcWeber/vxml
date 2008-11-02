@@ -10,3 +10,6 @@ to be done
 * replace Show by a different class
 
 docs : http://www.w3.org/TR/xml11/
+
+eg this does not result in optimal state transformations:
+  (a|b|c+)*
