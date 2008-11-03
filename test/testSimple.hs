@@ -142,7 +142,9 @@ main = do
   print $ fStr $ runRoot $ vdo
           -- forceElements
           (c e)
-          vxmlSeqPlus_ ((d e), replicate 9 (d e))
+          -- vxmlSeqPlus_ ((d e), replicate 9 (d e))
           -- vxmlMapSeqPlus_ (\n -> d e ) [1..10]
+          (d e) `vxmlgtgt` (foldr1 vxmlgtgt $ map (const $ d e) [2..10])
+
 #endif
   print "\nsimple test end"

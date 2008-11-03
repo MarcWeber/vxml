@@ -252,7 +252,7 @@ vxmlMapSeqPlus_ :: ( VXMLMonad m  st el  st2 el2  st3 el3  st3 el3
                    ) => (forall st' elA st'' elB . t -> m  st el  st' elA  st'' elB ())
                   -> [t]
                   -> m st el st2 el2 st3 el3 ()
-vxmlMapSeqPlus_ f (x:xs) = vxmlSeqPlus_ (f x , map f xs)
+vxmlMapSeqPlus_ f (x:xs) = f x `vxmlgtgt` (foldr1 vxmlgtgt $ map f xs)
 vxmlMapSeqPlus_ _ [] = error "vxmlSeqPlus has been called with empty list"
 
 
