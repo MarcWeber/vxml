@@ -7,15 +7,11 @@ Cabal-Version: >=1.2
 build-type:      Simple
 LICENSE: GPL
 
-Flag DoValidate
-  Description: When set to True no type checking will take place (compilation will be much faster)
-              False neither tested nor supported, will be removed
+Flag WeakValidation
+  Description: Don't check order or amount of subelements, only check that an element can be a subelement of another
+               Currently this is the only usable setting for real projects.
+               Validation is approximately as good as the one provided by WASH.
   Default: True
-Flag StringOnly
-  Description: I'm not yet sure how to implement more abstraction without specialization..
-               The el type is not propagated through vxmlMapPlus :-(
-               True neither tested nor supported, will be removed
-  Default: False
 Flag BuildTestSimple
   Default: True
   Description:
@@ -52,11 +48,10 @@ Library
   install-includes: include/vxmldos.h
   hs-source-dirs:  src
   extensions: CPP
-  if flag(DoValidate)
-    cpp-options: -DDoValidate
+  if !flag(WeakValidation)
+    cpp-options: -DWEAK_VALIDATION
+  else
     extensions: OverlappingInstances
-  if flag(StringOnly)
-    cpp-options: -DSTRING_ONLY -Del=String -Del2=String -Del3=String -Delc3=String -Delc=String -DelA=String -DelB=String
 
 executable     testSimple
   main-is:        testSimple.hs
@@ -75,11 +70,10 @@ executable     testSimple
   extensions: CPP
   include-dirs: include
   extra-source-files: include/vxmldos.h
-  if flag(DoValidate)
-    cpp-options: -DDoValidate
+  if !flag(WeakValidation)
+    cpp-options: -DWEAK_VALIDATION
+  else
     extensions: OverlappingInstances
-  if flag(StringOnly)
-    cpp-options: -DSTRING_ONLY
 
 executable     testXHTMTL
   main-is:        testXHTML.hs
@@ -98,11 +92,10 @@ executable     testXHTMTL
   include-dirs: include
   extra-source-files: include/vxmldos.h
   extensions: CPP
-  if flag(DoValidate)
-    cpp-options: -DDoValidate
+  if !flag(WeakValidation)
+    cpp-options: -DWEAK_VALIDATION
+  else
     extensions: OverlappingInstances
-  if flag(StringOnly)
-    cpp-options: -DSTRING_ONLY -Del=String -Del2=String -Del3=String -Delc3=String -Delc=String -DelA=String -DelB=String
  
 
 executable     run-testcases
@@ -123,10 +116,10 @@ executable     run-testcases
                   , directory
                   , process
   extensions: CPP
-  if flag(DoValidate)
-    cpp-options: -DDoValidate
-  if flag(StringOnly)
-    cpp-options: -DSTRING_ONLY -Del=String -Del2=String -Del3=String -Delc3=String -Delc=String -DelA=String -DelB=String
+  if !flag(WeakValidation)
+    cpp-options: -DWEAK_VALIDATION
+  else
+    extensions: OverlappingInstances
 
 
 
@@ -149,6 +142,3 @@ executable     run-benchpress-test
                   , process
                   , benchpress
   extensions: CPP
-  if flag(StringOnly)
-    cpp-options: -DSTRING_ONLY -Del=String -Del2=String -Del3=String -Delc3=String -Delc=String  -DelA=String -DelB=String
-

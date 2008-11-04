@@ -232,7 +232,10 @@ instanceShow dataName value = do
     [funD 'show [ clause [wildP] (normalB (litE . stringL $ value)) []] ]
 
 
-#ifdef DoValidate
+#ifdef WEAK_VALIDATION
+elementState _ H.EMPTY = return $ (conT ''T.EMPTY, []) -- at least force that empty elements are still empty
+elementState _ _ = return $ (conT ''NoValidation, [])
+#else
 addInfo n s = modify (\ds -> ds { elements = (n,s) : elements ds } )
 -- initial state ready for starting type based parser
 elementState :: String -> H.ContentSpec -> StateT DataState Q (TypeQ, [DecQ])
@@ -313,9 +316,6 @@ realise n stF = do
 
 -- (x)+ is rewritten seq [x, x*]
 -- only for debugging:
-#else
-elementState _ H.EMPTY = return $ (conT ''T.EMPTY, []) -- at least force that empty elements are still empty
-elementState _ _ = return $ (conT ''NoValidation, [])
 #endif
 
 deriving instance Show H.Mixed
@@ -352,10 +352,10 @@ toCode (n, (Just (H.ElementDecl _ content), Just (H.AttListDecl _ attdefList) ) 
           | (H.AttDef name attType H.REQUIRED) <- attdefList ]
 
       stA = appTn (conT ''AS) [
-#ifdef DoValidate
-                              reqAttributes
-#else
+#ifdef WEAK_VALIDATION
                               hlist []
+#else
+                              reqAttributes
 #endif
                              ,
                              hlist [] {- added -}
