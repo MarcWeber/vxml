@@ -20,11 +20,7 @@ runProcess' dir name app args  = do
         hClose out
         return p
 
-extraFlags = tail [ ""
-#ifdef DoValidate
-                  , "-DDoValidate" , "-XOverlappingInstances", "-DPRINT_GENERATED_CODE"
-#endif
-                  ]
+extraFlags = [  "-XOverlappingInstances", "-DPRINT_GENERATED_CODE"]
 
 
 haskellFile repoDir moduleName extraImports contents = 
@@ -38,7 +34,7 @@ haskellFile repoDir moduleName extraImports contents =
                else [] ) ++ 
           [ "{-# LANGUAGE ScopedTypeVariables,  NoImplicitPrelude, FlexibleInstances,  NoMonomorphismRestriction,"
           , "UndecidableInstances,  FlexibleContexts,  EmptyDataDecls, TemplateHaskell,"
-          , "StandaloneDeriving, TypeSynonymInstances, MultiParamTypeClasses, FunctionalDependencies#-}"
+          , "StandaloneDeriving, TypeSynonymInstances, MultiParamTypeClasses, FunctionalDependencies, OverlappingInstances #-}"
           , "module " ++ (fromMaybe "Main" moduleName) ++ " where"
           , "import Language.Haskell.TH"
           , "import Control.Monad"

@@ -34,6 +34,7 @@ module Text.XML.Validated.Types (
   , XmlIds(..)
   , DetermineEl
   , DetermineElAddEl
+  , DetermineElAddText
 
 #ifndef WEAK_VALIDATION
   , ToWeakState
@@ -173,6 +174,7 @@ instance ( StEndAttrs elType stA
 class ToWeakState a b | a -> b
   -- el state 
 instance ToWeakState (Valid elType) (Valid elType)
+instance ToWeakState NoState NoState
 -- instance ToWeakState a NoState -- <-  done in TH.hs
   -- attr state 
 instance ToWeakState (AS a b) NoState
@@ -282,6 +284,8 @@ vxmlMapSeqPlus_ _ [] = error "vxmlSeqPlus has been called with empty list"
 
 -- used for AddAttrT
 class DetermineEl est el_ est2 el2_ | est est2 el2_ -> el_
+class DetermineElAddText elst el elst2 el2 text 
+      | elst elst2 text el2 -> el
 class DetermineElAddEl est el_ estc elc_ est2 el2_
       | est est2 estc el2_ -> el_
       , est est2 estc el2_ -> elc_
@@ -315,8 +319,8 @@ class EndAttrsEndElement elType el_ elFinal
   endAttrsEndElementDeclaredEmpty _ = endAttrsEndElement (undefined :: elType)
   endAttrsEndElement _ = endAttrsEndElementDeclaredEmpty (undefined :: elType)
 
-class AddText el_ text where
-  addText :: el_ -> text -> el_ -- el_, text node
+class AddText el_ el2_ text where
+  addText :: el_ -> text -> el2_ -- el_, text node
 
 -- after this no more attributes
 class EndEl elType el_ elFinal where
@@ -337,8 +341,8 @@ class XmlDocT elst el_ doc
 
 instance ( XmlDoc rootElType el2 doc
         , XmlIdsFromRoot rootElType
-        , EndElT (Valid rootElType) el st el2
-                            ) => XmlDocT (Valid rootElType) el doc where
+        , EndElT elst  el (Valid rootElType) el2
+                            ) => XmlDocT elst  el doc where
   xmlDocT e = 
         let PT el = endElT e
         in xmlDoc (undefined :: rootElType)
@@ -469,34 +473,24 @@ instance (
 -- ========== adding sub elements (text) =============================
 class AddTextT el_ el2_ text elst elst2 | el_ -> el2_, el2_ -> el_, elst -> elst2 where
   addTextT :: PT elst el_ -> text -> PT elst2 el2_
--- first child
 instance (
     EndAttrs el el2
+  , EndAttrsT (NYV (Element elType stA st hchs)) el
+              (NYV (Element elType AttrsOk st hchs)) el2
   , StEndAttrs elType stA
-  , AddText el2 text
-#ifdef WEAK_VALIDATION
-  , TypesEq st st'
+  , AddText el2 el3 text
   , ChildOk elType PCDATA
-#else
-  , Consume st PCDATA st'
-#endif
-  ) => AddTextT el el2 text (NYV (Element elType stA st  HFalse))
-                            (NYV (Element elType stA st' HTrue))
+  , Consume st PCDATA st3
+  , DetermineElAddText (NYV (Element elType stA st  hchs)) el2
+                       (NYV (Element elType stA st3 HTrue)) el3
+                       text
+  ) => AddTextT el el3 text (NYV (Element elType stA st  hchs))
+                            (NYV (Element elType AttrsOk st3 HTrue))
   where
-  addTextT (PT t) text = PT $ addText (endAttrs t) text
--- not first child (TODO: merge both instances)
-instance (
-    AddText el text
-#ifdef WEAK_VALIDATION
-  , TypesEq st st'
-  , ChildOk elType PCDATA
-#else
-  , Consume st PCDATA st'
-#endif
-  ) => AddTextT el el text (NYV (Element elType stA st  HTrue))
-                           (NYV (Element elType stA st' HTrue))
-  where
-  addTextT (PT t) text = PT $ addText t text
+  addTextT e text =
+      let (PT e') = endAttrsT e
+      in PT $ addText (e' :: el2) text
+
 
 -- ========== final element check ====================================
 class EndElT st el_ st2 el2_

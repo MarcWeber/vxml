@@ -92,13 +92,11 @@ main = do
       (a (aAttr "aAttr attribute"))
       (b (vxmlgtgt (aAttr "aAttr attribute") (bAttr "bAttr attribute")) )
 
-{- broken
   t "of course you can add a doctype as well" "with doctype"
   tDo $ runRootDoc  e
   tDo $ runRootDoc $ vxmlgtgt 
           (a (aAttr "aAttr attribute"))
           (b (vxmlgtgt (aAttr "aAttr attribute") (bAttr "bAttr attribute")) )
--}
 
 #if (__GLASGOW_HASKELL__ > 608)
 #include "vxmldos.h"
@@ -132,8 +130,7 @@ main = do
             b e
             vxmllift $ liftM ("my progname is " ++) getProgName
 
-  -- doctype currently broken 
-  tDoM $ runRootT $ testDoc
+  tDoM $ runRootDocT $ testDoc
   -- the same without doctype (there is a run<elem>[T] function for each tag
   -- which you can use to generate only subparts of an xml document. This is often used
   -- in Javascript where the innerHtml of a DOM object is set

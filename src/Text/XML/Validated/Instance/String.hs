@@ -9,6 +9,7 @@ import Data.List
 -- That's easy, we only have Strings here 
 instance DetermineEl st String st2 String
 instance DetermineElAddEl st String stc String st2 String 
+instance DetermineElAddText st String st2 String String
 
 -- most simple string instance, XML is generated on directly
 instance (Show elType) => CreateEl elType String where
@@ -23,7 +24,7 @@ instance EndAttrs String String where
   endAttrs tag = tag ++ ">"
 instance AddEl String String String where
   addEl = (++)
-instance AddText String String where
+instance AddText String String String where
   addText el text = el ++ (stringToHtmlString text)
 instance (Show elType) => EndEl elType String String where
   endEl _ = (++ ("</" ++ (show (undefined :: elType)) ++ ">"))
