@@ -22,7 +22,7 @@ runProcess' dir name app args  = do
 
 extraFlags = tail [ ""
 #ifdef DoValidate
-                  , "-DDoValidate" , "-XOverlappingInstances"
+                  , "-DDoValidate" , "-XOverlappingInstances", "-DPRINT_GENERATED_CODE"
 #endif
                   ]
 

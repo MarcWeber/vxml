@@ -12,6 +12,9 @@ Flag WeakValidation
                Currently this is the only usable setting for real projects.
                Validation is approximately as good as the one provided by WASH.
   Default: False
+Flag PrintGeneratedCode
+  Default: False
+  Description: If set vxml will output the by template haskell generated code to stdout
 Flag BuildTestSimple
   Default: True
   Description:
@@ -48,6 +51,8 @@ Library
   install-includes: include/vxmldos.h
   hs-source-dirs:  src
   extensions: CPP
+  if flag(PrintGeneratedCode)
+    cpp-options: -DPRINT_GENERATED_CODE
   if flag(WeakValidation)
     cpp-options: -DWEAK_VALIDATION
   else

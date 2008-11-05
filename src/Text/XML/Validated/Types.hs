@@ -35,19 +35,20 @@ module Text.XML.Validated.Types (
   , DetermineEl
   , DetermineElAddEl
 
+#ifndef WEAK_VALIDATION
+  , ToWeakState
+#endif
+  , WeakValidation(..)
 
   -- exported for utils and TH, you should not have to use them
   , InitialState, CreateElT(..)
   , Element, AS, AttrOk
   , ANY, PCDATA
   , A
-#ifdef WEAK_VALIDATION
-  , WeakValidation
+  , NoState
   , ChildOk
-#else
   , C, ElEndable
   , Consume
-#endif
   , EMPTY
 
   , PT(..), NYV, Elem, Valid
@@ -166,6 +167,39 @@ instance ( StEndAttrs elType stA
          , Monad m
  ) => ForceElements (VXMLT m) elType stA st hchs where
   forceElements = VXMLT $ \f -> return ((), \pt-> let (PT el_) = f pt in  PT el_)
+
+
+-- fall back to weak checking (last resort in some cases)
+class ToWeakState a b | a -> b
+  -- el state 
+instance ToWeakState (Valid elType) (Valid elType)
+-- instance ToWeakState a NoState -- <-  done in TH.hs
+  -- attr state 
+instance ToWeakState (AS a b) NoState
+instance ToWeakState AttrsOk AttrsOk
+
+class (StEndAttrs elType stA
+  , ToWeakState st st2
+  , ToWeakState stA stA2
+  ) => WeakValidation m elType stA stA2 st st2 hchs 
+  | stA -> stA2
+  , st -> st2
+  where
+  weakValidation :: m elst el_ 
+                     (NYV (Element elType stA st   hchs) ) el_
+                     (NYV (Element elType stA2 st2 hchs) ) el_
+                     ()
+instance ( StEndAttrs elType stA
+  , ToWeakState st st2
+  , ToWeakState stA stA2
+   ) => WeakValidation VXML elType stA stA2 st st2 hchs where
+  weakValidation = VXML $ \f -> ((), \pt-> let (PT el_) = f pt in  PT el_)
+instance ( StEndAttrs elType stA
+        , Monad m
+        , ToWeakState st st2
+        , ToWeakState stA stA2
+ ) => WeakValidation (VXMLT m) elType stA stA2 st st2 hchs where
+  weakValidation = VXMLT $ \f -> return ((), \pt-> let (PT el_) = f pt in  PT el_)
 
 class VXMLDebug m  st el_  st2 el2_  st3 el3_  a  where
   vxmldebug :: a -> m  st el_  st2 el2_  st3 el3_  a
@@ -335,20 +369,12 @@ class AddAttrT attrType attrValue st el_ st2 el2_
 
 instance (
        AddAttribute el el2 attrType attrValue
-      , AttrOk elType attrType
-#ifndef WEAK_VALIDATION
-      , -- remove attribute from required list
-        HMemberM (A attrType) req mreq
-      , HFromMaybe mreq req req'
-      , -- no attribute may be added twice
-        HMember (A attrType) added rd
-      , CheckDuplicateAttribute elType attrType rd
-#endif
+      , ConsumeAttr elType attrType stA stA2
       , DetermineEl (AS req  added) el
                     (AS HNil (HCons (A attrType) added)) el2
       ) => AddAttrT attrType attrValue
-                    (NYV (Element elType (AS req  added) st HFalse)) el
-                    (NYV (Element elType (AS req' (HCons (A attrType) added)) st HFalse)) el2
+                    (NYV (Element elType stA  st HFalse)) el
+                    (NYV (Element elType stA2 st HFalse)) el2
 
 
   where
@@ -358,8 +384,19 @@ instance ( YouCantAddAttributesAfterAddingContentTo elType
       ) => AddAttrT attrType attrValue (NYV (Element elType stA st HTrue)) el st2 el2
   where addAttrT = undefined -- shut up warning
 
+class ConsumeAttr elType attrType stA stA2 | elType attrType stA -> stA2
+instance ( AttrOk elType attrType
+        ) => ConsumeAttr elType  attrType NoState NoState
+instance (
+        -- remove attribute from required list
+        HMemberM (A attrType) req mreq
+      , HFromMaybe mreq req req'
+      , -- no attribute may be added twice
+        HMember (A attrType) added rd
+      , CheckDuplicateAttribute elType attrType rd
+      , AttrOk elType attrType
+        ) => ConsumeAttr elType attrType (AS req  added) (AS req' (HCons (A attrType) added))
 
-#ifndef WEAK_VALIDATION
 class HFromMaybe mb b r | mb b -> r
 instance  HFromMaybe HNothing b b
 instance  HFromMaybe (HJust a) b a
@@ -367,7 +404,6 @@ class CheckDuplicateAttribute elType attrType hbool
 instance CheckDuplicateAttribute elType attrType HFalse
 instance ( DuplicateAttribute elType attrType
          ) => CheckDuplicateAttribute elType attrType HTrue
-#endif
 
 -- ========== ending attributes ====================================== 
 class EndAttrsT est el est2 el2 
@@ -417,12 +453,8 @@ instance (
               cest2 elc2
               (NYV (Element elType AttrsOk st2 HTrue)) el3
       , AddEl el2 el3 elc2
-#ifdef WEAK_VALIDATION
-      , TypesEq st st2
       , ChildOk elType celType
-#else
       , Consume st (Elem celType) st2
-#endif
 
   ) => AddElT (NYV (Element elType stA st hchs)) el
               cest elc
@@ -474,15 +506,6 @@ class EndElT st el_ st2 el2_
     endElT :: (PT st el_)
            -> (PT st2 el2_)
 -- end element with childs
-#ifdef WEAK_VALIDATION
-instance ( EndEl elType el el2
-         , ElEndable elType st
-         , DetermineEl (NYV (Element elType stA WeakValidation HTrue)) el
-                             (Valid elType) el2
-         ) => EndElT (NYV (Element elType stA WeakValidation HTrue)) el
-                     (Valid elType) el2
-  where endElT (PT el_) = PT (endEl (undefined :: elType)  el_)
-#else
 instance ( EndEl elType el el2
          , ElEndable elType st
          , DetermineEl (NYV (Element elType stA st HTrue)) el
@@ -490,7 +513,6 @@ instance ( EndEl elType el el2
          ) => EndElT (NYV (Element elType stA st HTrue)) el
                      (Valid elType) el2
   where endElT (PT el_) = PT (endEl (undefined :: elType)  el_)
-#endif
 -- end elements without childs declared EMPTY
 instance ( EndAttrsEndElement elType el el2
          , StEndAttrs elType stA
@@ -500,16 +522,6 @@ instance ( EndAttrsEndElement elType el el2
                      (Valid elType) el2
   where endElT (PT el_) = PT (endAttrsEndElementDeclaredEmpty (undefined :: elType) el_)
 -- end elements without childs not declared EMPTY
-#ifdef WEAK_VALIDATION
-instance (
-          EndAttrsEndElement elType el el2
-         , ElEndable elType st
-         , DetermineEl (NYV (Element elType stA st HFalse)) el
-                       (Valid elType) el2
-         ) => EndElT (NYV (Element elType stA WeakValidation HFalse)) el
-                     (Valid elType) el2
-  where endElT (PT el) = PT $ endAttrsEndElement (undefined :: elType) el
-#else
 instance ( EndAttrsEndElement elType el el2
          , StEndAttrs elType stA
          , ElEndable elType st
@@ -518,7 +530,6 @@ instance ( EndAttrsEndElement elType el el2
          ) => EndElT (NYV (Element elType stA st HFalse)) el
                      (Valid elType) el2
   where endElT (PT el_) = PT (endAttrsEndElement (undefined :: elType) el_)
-#endif
 
 -- ========== the uglier part, the validation by transforming states
 
@@ -534,23 +545,21 @@ data AttrsOk      -- is replaced by this after the first element has been added
 -- ========== allowed to end element ? ===============================
 class ElEndable elType a
 class StEndAttrs elType elst
-#ifdef WEAK_VALIDATION
-instance ElEndable elType all
-instance  StEndAttrs elType all
-#else
 instance ElEndable elType C
 instance ElEndable elType EMPTY
 instance ElEndable elType ANY
 instance ElEndable elType PCDATA
+instance ElEndable elType NoState
   -- fail nicer error messages
 instance ( MoreElementsExpected elType (Elem a)) =>  ElEndable elType (Elem a)
 
+
+instance  StEndAttrs elType NoState
 instance  StEndAttrs elType (AS HNil added)
 instance StEndAttrs elType AttrsOk -- already ok 
   -- fail nicer error messages
 instance  ( RequiredAttributesMissing elType (HCons a b)
           ) => StEndAttrs elType (AS (HCons a b) added)
-#endif
 
 data EMPTY         -- see comment on EndAttrsEndElement
 data ANY           -- any element
@@ -559,11 +568,9 @@ data A a
 data PCDATA        -- add text
 data NYV state -- not yet valid state
 data Valid elType -- "state" of validated element
-#ifdef WEAK_VALIDATION
 -- only check wether this child is allowed, but not the order 
 -- instances are generated in TH.hs
 class ChildOk elType child
-#else
 data C      -- consumed, no element left
 data F a    --
 
@@ -573,18 +580,13 @@ class Consume st el_ r | st el_ -> r -- result is on of C,CS,R,F
 instance Consume PCDATA PCDATA C
 instance Consume ANY PCDATA C
 instance Consume ANY (Elem e) C
+instance Consume NoState elType NoState
 -- fail nicer error messages
-instance (Fail (GotPCDATAButExpected (Elem e))
-        ) => Consume (Elem e) PCDATA ()
-
-instance (Fail (ExpectedPCDATABUtGot (Elem e))
+instance (Fail (ExpectedPCDATAButGot (Elem e))
         ) => Consume PCDATA (Elem e) ()
 
-#endif
-
 -- ========== errors =================================================
-data GotPCDATAButExpected a
-data ExpectedPCDATABUtGot a
+data ExpectedPCDATAButGot a
 
 -- never implement instances for these.. either the lib is buggy or your data
 -- does'nt validate against dtd
@@ -596,11 +598,9 @@ class DuplicateAttribute elType attrType
 debugEl :: (Fail x) => (PT x String) -> b
 debugEl = undefined
 
-#ifdef WEAK_VALIDATION
-data WeakValidation -- used instead of the element state 
+data NoState -- used instead of the element state 
 class TypesEq a b | a -> b, b -> a
 instance TypesEq a a
-#endif
 
 ---  ========= type level equality helper =============================
 -- Thanks Oleg Kiselyov for helping me here

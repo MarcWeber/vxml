@@ -57,7 +57,8 @@ main = do
   h "simple test ghc-6.8.2 compatible start - adding subelements piecwise by using addElT"
   t "only root"
     "<root/>"
-  tS root_TT
+  tS (root_TT)
+-- (NYV (Element Root_T (AS HNil HNil) WeakValidation HFalse)) el'
 
   t "root with subelement a"
     "<root><a/></root>"
@@ -139,14 +140,17 @@ main = do
   tDoM $ runRootT $ testDoc
 
   -- TODO: how to solve this?
-  print $ fStr $ runRoot $ vdo
+  print $ fStr $ runRoot e
           -- forceElements
-          (c e)
+          -- (c e)
+          -- d e
+          -- d e
+          -- d e
+          -- d e
           -- vxmlSeqPlus_ ((d e), replicate 9 (d e))
           -- vxmlMapSeqPlus_ (\n -> d e ) [1..10]
-          (d e) `vxmlgtgt` (foldr1 vxmlgtgt $ map (const $ d e) [2..10])
-    
-          -- (f e)
+          -- (d e) `vxmlgtgt` (foldr1 vxmlgtgt $ map (const $ d e) [2..10])
+          -- (f e) -- f is not allowed as child element of root. This must fail 
 
 #endif
   print "\nsimple test end"
