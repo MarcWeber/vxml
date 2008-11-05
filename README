@@ -75,6 +75,38 @@ Validation errors are indicated by missing instances. Examples:
             z -> St 1
      Example taken from testcase star_in_seq_in_star.txt)
 
+Known problems:
+---------------
+Some things can't be done easily yet. Take this example from testSimple.hs;
+  vxmlMapSeqPlus_ (\n -> d e ) [1..10] 
+
+the corresponding real world example rendering a list of numbers:
+  ul $ vdo
+    vxmlMapSeqPlus_ (\n -> li . text . show ) [1..10]
+
+The problem here is that the XHTML dtd says an ul item must have at least one li.
+Thus there must be two states to represent this: the first not endable and the
+second which is valid endable.
+That's why you can't use mp for all elements, but only for all starting from
+the second.
+And there is the case that you really don't want any element (eg because you're
+using JavaScript to let the user add them interactively).
+That's where weak validation is of benefit: You can use
+the corresponding real world example rendering a list of numbers:
+  ul weakValidation
+
+or
+  ul $ vdo
+    forceElements -- make the type look like elements have been added already 
+    weakValidation -- replace the state by the special state WeakValidation. 
+    vxmlSeq_ $ map (\n -> li . text . show ) [1..10]
+
+If you're tired of adding weakValidation you can compile with flag WeakValidation on
+WeakValidation will only check that an element may be added but does neither
+care about amount nor order of childs.
+
+attrubtes are not validated yet..
+see and enhance TODO.
 
 Credits to:
 -----------

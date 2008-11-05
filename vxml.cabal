@@ -11,7 +11,7 @@ Flag WeakValidation
   Description: Don't check order or amount of subelements, only check that an element can be a subelement of another
                Currently this is the only usable setting for real projects.
                Validation is approximately as good as the one provided by WASH.
-  Default: True
+  Default: False
 Flag BuildTestSimple
   Default: True
   Description:
@@ -48,7 +48,7 @@ Library
   install-includes: include/vxmldos.h
   hs-source-dirs:  src
   extensions: CPP
-  if !flag(WeakValidation)
+  if flag(WeakValidation)
     cpp-options: -DWEAK_VALIDATION
   else
     extensions: OverlappingInstances
@@ -69,9 +69,9 @@ executable     testSimple
                   , template-haskell
   extensions: CPP
   include-dirs: include
-  extra-source-files: include/vxmldos.h
-  if !flag(WeakValidation)
+  if flag(WeakValidation)
     cpp-options: -DWEAK_VALIDATION
+    extensions: OverlappingInstances
   else
     extensions: OverlappingInstances
 
@@ -90,9 +90,8 @@ executable     testXHTMTL
                   , containers
                   , template-haskell
   include-dirs: include
-  extra-source-files: include/vxmldos.h
   extensions: CPP
-  if !flag(WeakValidation)
+  if flag(WeakValidation)
     cpp-options: -DWEAK_VALIDATION
   else
     extensions: OverlappingInstances
@@ -116,8 +115,9 @@ executable     run-testcases
                   , directory
                   , process
   extensions: CPP
-  if !flag(WeakValidation)
+  if flag(WeakValidation)
     cpp-options: -DWEAK_VALIDATION
+    extensions: OverlappingInstances
   else
     extensions: OverlappingInstances
 

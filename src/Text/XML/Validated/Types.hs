@@ -39,10 +39,14 @@ module Text.XML.Validated.Types (
   -- exported for utils and TH, you should not have to use them
   , InitialState, CreateElT(..)
   , Element, AS, AttrOk
+  , ANY, PCDATA
+  , A
 #ifdef WEAK_VALIDATION
-  , WeakValdiation
+  , WeakValidation
+  , ChildOk
 #else
-  , ANY, C, PCDATA, A, ElEndable
+  , C, ElEndable
+  , Consume
 #endif
   , EMPTY
 
@@ -51,9 +55,6 @@ module Text.XML.Validated.Types (
   -- for debugging
   , debugEl
   , fromPTInternal
-#ifndef WEAK_VALIDATION
-  , Consume
-#endif
   ) where
 
 import Data.HList
@@ -156,7 +157,7 @@ class (StEndAttrs elType stA
   ) => ForceElements m elType stA st hchs where
   forceElements :: m elst el_ 
                      (NYV (Element elType stA st hchs) ) el_
-                     (NYV (Element elType stA st HTrue) ) el_
+                     (NYV (Element elType AttrsOk st HTrue) ) el_
                      ()
 instance ( StEndAttrs elType stA
    ) => ForceElements VXML elType stA st hchs where
@@ -333,7 +334,7 @@ class AddAttrT attrType attrValue st el_ st2 el2_
   addAttrT :: PT st el_ -> attrType -> attrValue -> PT st2 el2_
 
 instance (
-                            AddAttribute el el2 attrType attrValue
+       AddAttribute el el2 attrType attrValue
       , AttrOk elType attrType
 #ifndef WEAK_VALIDATION
       , -- remove attribute from required list
@@ -416,8 +417,12 @@ instance (
               cest2 elc2
               (NYV (Element elType AttrsOk st2 HTrue)) el3
       , AddEl el2 el3 elc2
-
+#ifdef WEAK_VALIDATION
+      , TypesEq st st2
+      , ChildOk elType celType
+#else
       , Consume st (Elem celType) st2
+#endif
 
   ) => AddElT (NYV (Element elType stA st hchs)) el
               cest elc
@@ -437,20 +442,22 @@ instance (
     EndAttrs el el2
   , StEndAttrs elType stA
   , AddText el2 text
-#ifndef WEAK_VALIDATION
-  , Consume st PCDATA st'
-#else
+#ifdef WEAK_VALIDATION
   , TypesEq st st'
+  , ChildOk elType PCDATA
+#else
+  , Consume st PCDATA st'
 #endif
   ) => AddTextT el el2 text (NYV (Element elType stA st  HFalse))
                             (NYV (Element elType stA st' HTrue))
   where
   addTextT (PT t) text = PT $ addText (endAttrs t) text
--- not first child
+-- not first child (TODO: merge both instances)
 instance (
     AddText el text
 #ifdef WEAK_VALIDATION
   , TypesEq st st'
+  , ChildOk elType PCDATA
 #else
   , Consume st PCDATA st'
 #endif
@@ -467,20 +474,26 @@ class EndElT st el_ st2 el2_
     endElT :: (PT st el_)
            -> (PT st2 el2_)
 -- end element with childs
+#ifdef WEAK_VALIDATION
 instance ( EndEl elType el el2
-#ifndef WEAK_VALIDATION
          , ElEndable elType st
-#endif
+         , DetermineEl (NYV (Element elType stA WeakValidation HTrue)) el
+                             (Valid elType) el2
+         ) => EndElT (NYV (Element elType stA WeakValidation HTrue)) el
+                     (Valid elType) el2
+  where endElT (PT el_) = PT (endEl (undefined :: elType)  el_)
+#else
+instance ( EndEl elType el el2
+         , ElEndable elType st
          , DetermineEl (NYV (Element elType stA st HTrue)) el
                              (Valid elType) el2
          ) => EndElT (NYV (Element elType stA st HTrue)) el
                      (Valid elType) el2
   where endElT (PT el_) = PT (endEl (undefined :: elType)  el_)
+#endif
 -- end elements without childs declared EMPTY
 instance ( EndAttrsEndElement elType el el2
-#ifdef DoValidate
          , StEndAttrs elType stA
-#endif
          , DetermineEl (NYV (Element elType stA EMPTY HFalse)) el
                        (Valid elType) el2
          ) => EndElT (NYV (Element elType stA EMPTY HFalse)) el
@@ -489,9 +502,13 @@ instance ( EndAttrsEndElement elType el el2
 -- end elements without childs not declared EMPTY
 #ifdef WEAK_VALIDATION
 instance (
-         ) => EndElT (NYV (Element elType stA WEAK_VALIDATION HFalse)) el
+          EndAttrsEndElement elType el el2
+         , ElEndable elType st
+         , DetermineEl (NYV (Element elType stA st HFalse)) el
+                       (Valid elType) el2
+         ) => EndElT (NYV (Element elType stA WeakValidation HFalse)) el
                      (Valid elType) el2
-  where endElT (PT _ el) = PT undefined (endAttrsEndElement (undefined :: elType) el)
+  where endElT (PT el) = PT $ endAttrsEndElement (undefined :: elType) el
 #else
 instance ( EndAttrsEndElement elType el el2
          , StEndAttrs elType stA
@@ -516,8 +533,10 @@ data AttrsOk      -- is replaced by this after the first element has been added
 
 -- ========== allowed to end element ? ===============================
 class ElEndable elType a
+class StEndAttrs elType elst
 #ifdef WEAK_VALIDATION
 instance ElEndable elType all
+instance  StEndAttrs elType all
 #else
 instance ElEndable elType C
 instance ElEndable elType EMPTY
@@ -526,7 +545,6 @@ instance ElEndable elType PCDATA
   -- fail nicer error messages
 instance ( MoreElementsExpected elType (Elem a)) =>  ElEndable elType (Elem a)
 
-class StEndAttrs elType elst
 instance  StEndAttrs elType (AS HNil added)
 instance StEndAttrs elType AttrsOk -- already ok 
   -- fail nicer error messages
@@ -541,7 +559,11 @@ data A a
 data PCDATA        -- add text
 data NYV state -- not yet valid state
 data Valid elType -- "state" of validated element
-#ifndef WEAK_VALIDATION
+#ifdef WEAK_VALIDATION
+-- only check wether this child is allowed, but not the order 
+-- instances are generated in TH.hs
+class ChildOk elType child
+#else
 data C      -- consumed, no element left
 data F a    --
 
@@ -574,8 +596,10 @@ class DuplicateAttribute elType attrType
 debugEl :: (Fail x) => (PT x String) -> b
 debugEl = undefined
 
-#ifndef WEAK_VALIDATION
-data WEAK_VALIDATION -- used instead of the element state 
+#ifdef WEAK_VALIDATION
+data WeakValidation -- used instead of the element state 
+class TypesEq a b | a -> b, b -> a
+instance TypesEq a a
 #endif
 
 ---  ========= type level equality helper =============================

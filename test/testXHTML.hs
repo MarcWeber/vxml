@@ -86,8 +86,10 @@ main = do
   --   vxmlMapSeqPlus_ (\n -> li $ vxmlreturn ()  ) [1..10]
 
   print $ fStr $ runUl $ vdo
-          -- forceElements
-          vxmlSeqPlus_ (li $ text $ "first", Prelude.map (li . text .show) [ 1..10])
+          forceElements
+          -- vxmlSeqPlus_ (li $ text $ "first", Prelude.map (li . text .show) [ 1..10])
+          vxmlSeq_ $ Prelude.map (\n -> li $ vxmlreturn ()) [1..10]
+
           -- TODO howto do this? 
           -- vxmlMapSeqPlus_ (\n -> li $ vxmlreturn ()  ) [1..10]
 
