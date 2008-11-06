@@ -48,7 +48,8 @@ Library
                    Text.XML.Validated.Instance.String
                    Text.XML.Validated.TH
   other-modules:  Text.XML.Validated.Util
-  install-includes: include/vxmldos.h
+  include-dirs: include
+  install-includes: vxmldos.h
   hs-source-dirs:  src
   extensions: CPP
   if flag(PrintGeneratedCode)
