@@ -16,7 +16,7 @@ Flag PrintGeneratedCode
   Default: False
   Description: If set vxml will output the by template haskell generated code to stdout
 Flag BuildTestSimple
-  Default: True
+  Default: False
   Description:
       wether to build the testSimple test
 Flag BuildTestXHTML
