@@ -104,21 +104,22 @@ executable     testXHTMTL
 
 executable     run-testcases
   main-is:        run-testcases.hs
-  if !(flag(BuildTestCases))
+  if (flag(BuildTestCases))
+    build-depends:   haskell98
+                    , base
+                    , HList
+                    , HaXml >= 1.19
+                    , filepath
+                    , mtl
+                    , pretty
+                    , containers
+                    , HUnit
+                    , template-haskell
+                    , directory
+                    , process
+  else
     buildable: False
   hs-source-dirs: test, src
-  build-depends:   haskell98
-                  , base
-                  , HList
-                  , HaXml >= 1.19
-                  , filepath
-                  , mtl
-                  , pretty
-                  , containers
-                  , HUnit
-                  , template-haskell
-                  , directory
-                  , process
   extensions: CPP
   if flag(WeakValidation)
     cpp-options: -DWEAK_VALIDATION
@@ -130,20 +131,21 @@ executable     run-testcases
 
 executable     run-benchpress-test
   main-is:        run-benchpress-test.hs
-  if !(flag(BuildBenchpressTest))
+  if (flag(BuildBenchpressTest))
+    build-depends:   haskell98
+                    , base
+                    , HList
+                    , HaXml >= 1.19
+                    , filepath
+                    , mtl
+                    , pretty
+                    , containers
+                    , HUnit
+                    , template-haskell
+                    , directory
+                    , process
+                    , benchpress
+  else
     buildable: False
   hs-source-dirs: test, src
-  build-depends:   haskell98
-                  , base
-                  , HList
-                  , HaXml >= 1.19
-                  , filepath
-                  , mtl
-                  , pretty
-                  , containers
-                  , HUnit
-                  , template-haskell
-                  , directory
-                  , process
-                  , benchpress
   extensions: CPP
